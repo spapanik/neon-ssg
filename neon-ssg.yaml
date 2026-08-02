@@ -1,0 +1,45 @@
+site:
+  name: Neon Static Site Generator
+  author: Stephanos Kuma
+  copyright: "© 2026 Stephanos Kuma"
+
+content:
+  include:
+    - src: ../LICENSE.md
+      as: LICENSE.md
+
+  nav:
+    - Home: README.md
+    - Installation: installation.md
+    - Usage:
+        - usage/index.md
+    - About:
+        - License: LICENSE.md
+        - Changelog: CHANGELOG.md
+        - Code of Conduct: CODE_OF_CONDUCT.md
+
+repo:
+  url: https://github.com/spapanik/neon-ssg/
+  branch: main
+  edit_path: docs/
+
+theme:
+  name: neon
+
+  icons:
+    repo: github
+
+  features:
+    - code.annotate
+    - code.copy
+    - nav.breadcrumbs
+    - nav.index_pages
+    - nav.back_to_top
+    - nav.tracking
+    - nav.instant
+    - nav.instant_progress
+    - toc.follow
+    - search
+    - search.suggest
+    - search.share
+    - content.tooltips

@@ -1,0 +1,174 @@
+[build-system]
+requires = [
+    "uv_build>=0.12.0,<0.13",
+]
+build-backend = "uv_build"
+
+[project]
+name = "neon-ssg"
+version = "0.1.0"
+
+authors = [
+    { name = "Stephanos Kuma", email = "stephanos@kuma.ai" },
+]
+license = { text = "BSD-3-Clause" }
+
+readme = "docs/README.md"
+description = "Static site generator"
+keywords = [
+    "ssg",
+]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Intended Audience :: Developers",
+]
+
+requires-python = ">=3.11"
+dependencies = [
+    "dj_settings~=9.0",
+    "jinja2~=3.1",
+    "markdown~=3.8",
+    "pygments~=2.20",
+    "pymdown-extensions~=11.0",
+    "pyutilkit~=0.13",
+    "watchfiles~=1.2",
+]
+
+[project.urls]
+homepage = "https://neon-ssg.readthedocs.io/en/stable/"
+repository = "https://github.com/spapanik/neon-ssg/"
+documentation = "https://neon-ssg.readthedocs.io/en/stable/"
+
+[project.scripts]
+ssg = "neon_ssg.__main__:main"
+
+[dependency-groups]
+dev = [
+    "ipdb~=0.13",
+    "ipython~=9.15",
+    "ptpython~=3.0",
+    { include-group = "lint" },
+    { include-group = "test" },
+]
+lint = [
+    "mypy~=2.1",                     # Keep mypy for CI/CD
+    "ruff~=0.16",
+    "ty~=0.0.63",
+    "types-markdown~=3.8",
+    "types-pygments~=2.19",
+    { include-group = "test_core" },
+]
+test = [
+    "pytest-cov~=7.1",
+    { include-group = "test_core" },
+]
+test_core = [
+    "pytest~=9.1",
+]
+
+[tool.mypy]
+# Keep mypy for CI/CD
+check_untyped_defs = true
+disallow_any_decorated = true
+disallow_any_explicit = true
+disallow_any_expr = false          # many builtins are Any
+disallow_any_generics = true
+disallow_any_unimported = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_untyped_defs = true
+extra_checks = true
+ignore_missing_imports = true
+no_implicit_reexport = true
+show_column_numbers = true
+show_error_codes = true
+strict_equality = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unused_configs = true
+warn_unused_ignores = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+# Keep mypy for CI/CD
+module = "tests.*"
+disallow_any_decorated = false # mock.MagicMock is Any
+
+[tool.ruff]
+src = [
+    "src",
+]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "ALL",
+]
+ignore = [
+    "C901",   # Adding a limit to complexity is too arbitrary
+    "CPY001", # Use only a project copyright
+    "COM812", # Avoid conflicts with the formatter
+    "D10",    # Not everything needs a docstring
+    "D203",   # Prefer `no-blank-line-before-class` (D211)
+    "D213",   # Prefer `multi-line-summary-first-line` (D212)
+    "PLR09",  # Adding a limit to complexity is too arbitrary
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "FBT001",  # Test arguments are handled by pytest
+    "PLR2004", # Tests should contain magic number comparisons
+    "S101",    # Pytest needs assert statements
+    "SLF001",  # Tests need to access private members for coverage
+]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"mock".msg = "Use unittest.mock"
+"pytz".msg = "Use zoneinfo"
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+forced-separate = [
+    "tests",
+]
+split-on-trailing-comma = false
+
+[tool.pytest]
+minversion = "9.0"
+strict = true
+addopts = [
+    "-ra",
+    "-v",
+]
+testpaths = [
+    "tests",
+]
+
+[tool.coverage.run]
+branch = true
+source = [
+    "src/",
+]
+data_file = ".cov_cache/coverage.dat"
+omit = [
+    "src/**/type_defs.py",
+]
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "raise UnreachableCodeError",
+]
+fail_under = 100
+precision = 2
+show_missing = true
+skip_covered = true
+skip_empty = true
