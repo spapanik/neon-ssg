@@ -1,6 +1,6 @@
 [build-system]
 requires = [
-    "uv_build>=0.12.0,<0.13",
+    "uv_build>=0.11.0,<0.14",
 ]
 build-backend = "uv_build"
 
@@ -47,15 +47,15 @@ ssg = "neon_ssg.__main__:main"
 [dependency-groups]
 dev = [
     "ipdb~=0.13",
-    "ipython~=9.15",
+    "ipython~=9.17",
     "ptpython~=3.0",
     { include-group = "lint" },
     { include-group = "test" },
 ]
 lint = [
-    "mypy~=2.1",                     # Keep mypy for CI/CD
+    "mypy~=2.4",                     # Keep mypy for CI/CD
     "ruff~=0.16",
-    "ty~=0.0.63",
+    "ty~=0.0.89",
     "types-markdown~=3.8",
     "types-pygments~=2.19",
     { include-group = "test_core" },
