@@ -1,97 +1,48 @@
 # Usage
 
-`ssg` builds a static documentation site from a directory of Markdown files.
-
-## Building a site
-
-From your project root, run:
+`ssg build` renders Markdown documentation into a static site. Run it from the
+project directory:
 
 ```console
 $ ssg build
 ```
 
-This reads Markdown files from `docs/` and writes static HTML into `site/`.
-Pass `-v` to list every page as it is built. The command exits non-zero if
-the build produces any errors, such as broken internal links.
+By default, Markdown and assets are read from `docs/` and the site is written
+to `site/`. The output directory must not overlap the source directory. A
+non-empty output directory is only replaced if it contains a `.neon-ssg` marker
+from an earlier build. A failed render leaves the earlier output available.
 
-## Previewing a site
+## Navigation
 
-Build and serve the site locally with:
-
-```console
-$ ssg serve
-```
-
-The preview is available at `http://localhost:8000/`. Use `--host` and
-`--port` to change the listening address, for example:
-
-```console
-$ ssg serve --host 0.0.0.0 --port 3000
-```
-
-Stop the server with <kbd>Ctrl</kbd>+<kbd>C</kbd>. Run `ssg serve` again after
-editing source files; automatic rebuilds are not yet enabled.
-
-The preview is built into a temporary directory and removed when the server
-stops, so serving never touches the configured output directory.
-
-## Configuration
-
-Configuration is optional. To override the defaults, create a `neon-ssg.yaml`
-file in the project root:
+Create `neon-ssg.yaml` to set the site name and navigation. Entries point to
+Markdown paths relative to the documentation directory; groups can be nested.
+If navigation is omitted, all Markdown pages are listed in path order.
 
 ```yaml
 site:
-    name: "My Docs"
-    url: "https://docs.example.com"
-
+  name: My documentation
 content:
-    docs_root: "docs"
-    site_root: "site"
+  nav:
+    - Home: README.md
+    - Guides:
+        - Getting started: guides/start.md
 ```
 
-- `site.name` is used in page titles and the site header. It defaults to the
-  name of the project directory.
-- `site.url` enables canonical URLs. It has no default.
-- `content.docs_root` is the source directory. It defaults to `docs`.
-- `content.site_root` is the build target. It defaults to `site`.
+Markdown links to other Markdown pages are rewritten to their generated HTML
+paths. Missing linked pages and navigation targets fail the build. Other files
+are copied as assets. `index.md` and `README.md` produce `index.html` in their
+containing directory; other Markdown files produce a directory with an
+`index.html` inside it. Inputs that map to the same output cause an error.
 
-Both roots are resolved relative to the directory containing `neon-ssg.yaml`,
-and may point outside it with `../`. This allows the config to live inside
-the docs tree itself:
+Files outside the documentation directory can be included explicitly:
 
 ```yaml
-# proj/docs/neon-ssg.yaml
 content:
-    docs_root: "."
-    site_root: "../site"
+  include:
+    - src: ../LICENSE.md
+      as: LICENSE.md
 ```
 
-When the config lives inside the docs tree, it is not copied into the built
-site, and hidden files (names starting with a dot) are always skipped.
-
-The output directory is removed and rebuilt on every build. As a safety net,
-`ssg` marks its output with a `.neon-ssg` file and refuses to delete a
-non-empty directory that lacks the marker, so a mistyped `site_root` cannot
-wipe an unrelated directory.
-
-## Writing pages
-
-Every `*.md` file under the docs directory becomes a page with a
-directory-style URL: `docs/guide.md` and `docs/guide/index.md` both map to
-`/guide/`. All other files are copied verbatim and keep their paths.
-
-Page titles come from the `title` metadata key when present, then the first
-level-one heading, then the file name.
-
-The following Markdown features work out of the box:
-
-- Fenced code blocks with build-time syntax highlighting.
-- Admonitions (`!!! note "Title"`) and collapsible details (`??? tip`).
-- Snippets (`--8<-- "file.md"`), resolved from the docs directory.
-- Mermaid diagrams in `mermaid` fenced blocks.
-- Tables, and a table of contents with anchor permalinks.
-
-Internal links between Markdown files (`[guide](../guide/index.md)`) are
-rewritten to the final URLs. Links to missing files fail the build with a
-`broken-link` diagnostic that suggests the closest existing file.
+The `src` path is relative to the documentation directory and `as` is a
+relative path within the documentation tree. `ssg serve` and automatic reload
+are not implemented yet.

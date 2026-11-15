@@ -8,6 +8,7 @@ __pycache__/
 # installation/build artifacts
 .yamk/
 dist/
+/site/
 uv.lock
 
 # local dev

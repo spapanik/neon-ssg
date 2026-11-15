@@ -93,7 +93,9 @@ configuration distinct from dependency metadata.
   can be reproduced despite machine-specific configuration or environment.
 - Resolve configured filesystem paths relative to the configuration's
   resolution root, rather than the process's incidental working directory.
-  Distinguish source paths from output-relative paths and validate the latter.
+  Include source paths are relative to the configured documentation directory;
+  include targets are relative to that directory's content tree. Distinguish
+  source paths from output-relative paths and validate the latter.
 - Continue the existing typed configuration and structured diagnostics
   approach: report actionable locations and hints where available, collect
   independent configuration errors, and retain Python warning integration and
