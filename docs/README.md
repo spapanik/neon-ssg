@@ -11,7 +11,16 @@
 [![build automation: yam][yam_badge]][yam_url]
 [![Lint: ruff][ruff_badge]][ruff_url]
 
-Long project description and tldr goes here
+neon-ssg is an early-stage Python static site generator for documentation.
+It turns Markdown and assets into a static site with configurable navigation.
+The project is intended to grow into a richer documentation experience; today,
+`ssg build` is the implemented command. Development serving, live reload,
+translations and plugins are planned but are not yet available.
+
+Install the package with Python 3.11 or newer, then run `ssg build` from a
+project containing a `docs/` directory. The generated site is written to
+`site/`. See the [installation guide](installation.md) and
+[usage guide](usage/index.md) for details.
 
 ## Links
 

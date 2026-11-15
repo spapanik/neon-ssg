@@ -12,6 +12,16 @@ to `site/`. The output directory must not overlap the source directory. A
 non-empty output directory is only replaced if it contains a `.neon-ssg` marker
 from an earlier build. A failed render leaves the earlier output available.
 
+The defaults can be changed in `neon-ssg.yaml` using `content.docs_root`
+and `content.site_root`. These paths are relative to the configuration
+directory. Hidden files and directories in the documentation tree are skipped.
+
+```yaml
+content:
+  docs_root: manual
+  site_root: public
+```
+
 ## Navigation
 
 Create `neon-ssg.yaml` to set the site name and navigation. Entries point to

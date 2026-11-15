@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog], and this project adheres to [Semantic
 
 ## [Unreleased]
 
+## [0.1.0]
+
+### Added
+
+- Build a static documentation site from Markdown and assets with `ssg build`.
+- Configure site metadata, source and output directories, nested navigation
+  and included files through `neon-ssg.yaml`.
+- Rewrite links to Markdown pages, and report missing pages and conflicting
+  output paths.
+- Stage builds before replacing marked output, preserving the previous site if
+  rendering fails.
+- Resolve scalar configuration from layered files, environment variables and
+  defaults, with typed validation and diagnostics.
+
+The development server, live reload, translations and plugins are not yet
+implemented in this release.
+
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
 [Unreleased]: https://github.com/spapanik/neon-ssg/compare/v0.1.0...main

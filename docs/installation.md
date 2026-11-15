@@ -1,17 +1,18 @@
 # Installation
 
-# Using uv
-
-We recommend using [uv] for the installation of `neon-ssg` as it provides
-an isolated environment for the package, preventing any dependency conflicts.
-
-The minimum python version needed is `3.11` but as uv is used, version 3.14
-is preferred.
-
-To install `neon-ssg` using uv, run the following command in your terminal:
+neon-ssg requires Python 3.11 or newer. Install the published package with
+[uv](https://docs.astral.sh/uv/):
 
 ```console
-$ uv tool install --python 3.14 neon-ssg
+$ uv tool install neon-ssg==0.1.0
 ```
 
-[uv]: https://github.com/astral-sh/uv
+Alternatively, install it into a Python environment with pip:
+
+```console
+$ python -m pip install neon-ssg==0.1.0
+```
+
+Run `ssg --version` to check the installation, then see the
+[usage guide](usage/index.md) to build a site. The package must be published
+before these installation commands can fetch version 0.1.0 from PyPI.
