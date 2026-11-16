@@ -37,7 +37,7 @@ project containing a `docs/` directory. The generated site is written to
 [licence_url]: https://neon-ssg.readthedocs.io/en/stable/LICENSE/
 [codecov_badge]: https://codecov.io/github/spapanik/neon-ssg/graph/badge.svg?token=Q20F84BW72
 [codecov_url]: https://codecov.io/github/spapanik/neon-ssg
-[readthedocs_badge]: https://readthedocs.org/projects/neon-ssg/badge/?version=latest
+[readthedocs_badge]: https://app.readthedocs.org/projects/neon-ssg/badge/?version=latest
 [readthedocs_url]: https://neon-ssg.readthedocs.io/en/latest/
 [pypi_badge]: https://img.shields.io/pypi/v/neon-ssg
 [pypi_url]: https://pypi.org/project/neon-ssg
