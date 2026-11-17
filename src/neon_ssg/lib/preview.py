@@ -8,10 +8,13 @@ import sys
 import tempfile
 import threading
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+T = TypeVar("T")
 
 
 class Preview:
@@ -61,7 +64,7 @@ class Preview:
                 shutil.rmtree(previous.parent)
             return True
 
-    def read(self, reader: Callable[[Path], bytes]) -> bytes | None:
+    def read(self, reader: Callable[[Path], T]) -> T | None:
         """Keep the selected generation alive until the read finishes."""
         with self.lock:
             return None if self.current is None else reader(self.current)
