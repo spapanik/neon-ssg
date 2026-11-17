@@ -47,7 +47,9 @@ def test_preview_serves_identical_build_and_injects_reload(
     assert preview.rebuild()
     with urlopen(url + "/", timeout=3) as response:  # noqa: S310
         html = response.read()
-    assert html == (tmp_path / "site" / "index.html").read_bytes() + SCRIPT
+    assert html == (tmp_path / "site" / "index.html").read_bytes() + SCRIPT.replace(
+        b"__NEON_REVISION__", b"1"
+    )
     with urlopen(url + "/asset.txt", timeout=3) as response:  # noqa: S310
         assert response.read() == b"asset"
     with urlopen(url + "/__neon/status", timeout=3) as response:  # noqa: S310

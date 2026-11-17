@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from neon_ssg.lib.preview import Preview
 
 SCRIPT = b"""<script>
-let revision = null;
+let revision = __NEON_REVISION__;
 async function poll() {
   try {
     const status = await (await fetch('/__neon/status', {cache:'no-store'})).json();
@@ -62,15 +62,18 @@ class PreviewHandler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
 
-        def read(root: Path) -> tuple[bytes, str]:
+        def read(root: Path) -> tuple[bytes, str, int]:
+            root = root.resolve()
             target = (root / relative).resolve()
             if not target.is_relative_to(root):
                 raise FileNotFoundError
             if target.is_dir():
                 target = target / "index.html"
-            return target.read_bytes(), mimetypes.guess_type(target.name)[
-                0
-            ] or "application/octet-stream"
+            return (
+                target.read_bytes(),
+                mimetypes.guess_type(target.name)[0] or "application/octet-stream",
+                server.preview.revision,
+            )
 
         try:
             result = server.preview.read(read)
@@ -85,10 +88,13 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 ),
                 "text/html",
             )
+            revision = 0
         else:
-            payload, content_type = result
+            payload, content_type, revision = result
         if content_type == "text/html":
-            payload += SCRIPT
+            payload += SCRIPT.replace(
+                b"__NEON_REVISION__", str(revision).encode("ascii")
+            )
         self._send(content_type, payload)
 
     def _send(self, content_type: str, payload: bytes) -> None:

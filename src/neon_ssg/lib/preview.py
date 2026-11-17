@@ -29,6 +29,12 @@ class Preview:
         self.error: str | None = None
         self.process: subprocess.Popen[str] | None = None
         self.stopping = False
+        self.change_number = 0
+
+    def invalidate(self) -> None:
+        """Prevent an in-flight build from publishing after an edit."""
+        with self.lock:
+            self.change_number += 1
 
     def rebuild(self) -> bool:
         generation = Path(
@@ -39,6 +45,7 @@ class Preview:
             if self.stopping:
                 shutil.rmtree(generation)
                 return False
+            change_number = self.change_number
             self.process = subprocess.Popen(  # noqa: S603
                 [sys.executable, "-m", "neon_ssg.preview_worker", str(output)],
                 cwd=self.root,
@@ -49,11 +56,22 @@ class Preview:
                 errors="replace",
             )
             process = self.process
-        result, _ = process.communicate()
+        try:
+            result, _ = process.communicate()
+        except BaseException:
+            process.terminate()
+            process.communicate()
+            shutil.rmtree(generation)
+            with self.lock:
+                self.process = None
+            raise
         with self.lock:
             self.process = None
             if process.returncode != 0 or self.stopping:
                 self.error = result.strip() or "Build failed"
+                shutil.rmtree(generation)
+                return False
+            if change_number != self.change_number:
                 shutil.rmtree(generation)
                 return False
             previous = self.current

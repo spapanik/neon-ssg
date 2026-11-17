@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import importlib
 import runpy
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from neon_ssg.lib.exceptions import BuildFailedError
 from neon_ssg.lib.preview import Preview
 
 if TYPE_CHECKING:
@@ -57,3 +61,47 @@ def test_worker_entry_point(tmp_path: Path) -> None:
 def test_worker_can_be_imported() -> None:
     result = runpy.run_module("neon_ssg.preview_worker")
     assert callable(result["main"])
+
+
+def test_inflight_build_is_discarded_after_edit(tmp_path: Path) -> None:
+    preview = Preview(tmp_path, tmp_path)
+    process = MagicMock()
+    process.returncode = 0
+
+    def communicate() -> tuple[str, None]:
+        preview.invalidate()
+        return "", None
+
+    process.communicate.side_effect = communicate
+    with patch("neon_ssg.lib.preview.subprocess.Popen", return_value=process):
+        assert not preview.rebuild()
+    assert preview.current is None
+    assert preview.revision == 0
+
+
+def test_interrupted_worker_is_terminated_and_reaped(tmp_path: Path) -> None:
+    preview = Preview(tmp_path, tmp_path)
+    process = MagicMock()
+    process.communicate.side_effect = [KeyboardInterrupt, ("", None)]
+    with (
+        patch("neon_ssg.lib.preview.subprocess.Popen", return_value=process),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        preview.rebuild()
+    process.terminate.assert_called_once()
+    assert process.communicate.call_count == 2
+    assert preview.process is None
+
+
+def test_worker_reports_build_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with (
+        patch("sys.argv", ["preview_worker", str(tmp_path)]),
+        patch(
+            "neon_ssg.preview_worker.BuildCommand", side_effect=BuildFailedError("bad")
+        ),
+        pytest.raises(SystemExit, match="1"),
+    ):
+        importlib.import_module("neon_ssg.preview_worker").main()
+    assert capsys.readouterr().err == "bad\n"

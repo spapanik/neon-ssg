@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog], and this project adheres to [Semantic
 
 ## [Unreleased]
 
+### Added
+
+- Preview a site with `ssg serve`, rebuilding on edits and refreshing the browser
+  after a successful build. Failed builds leave the last successful preview
+  available.
+
 ## [0.1.0]
 
 ### Added

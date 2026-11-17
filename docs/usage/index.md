@@ -54,5 +54,18 @@ content:
 ```
 
 The `src` path is relative to the documentation directory and `as` is a
-relative path within the documentation tree. `ssg serve` and automatic reload
-are not implemented yet.
+relative path within the documentation tree.
+
+## Local preview
+
+Run `ssg serve` to build into a temporary directory and serve a live preview at
+`http://127.0.0.1:8000/`. Use `--host` and `--port` to change the address.
+The preview uses the same build as `ssg build` and leaves the configured output
+directory untouched. The browser refreshes after a successful rebuild. When a
+build fails, the last successful preview remains available and an error appears
+in the terminal and browser.
+
+The server watches the project directory and external documentation and include
+directories configured when it starts. Restart it after changing those paths.
+Changes to `pyproject.toml` or `uv.lock` require environment synchronisation and
+an explicit server restart. Press Ctrl+C to stop the server.
