@@ -152,7 +152,7 @@ def test_every_schema_key_has_a_home(
 
 @pytest.mark.parametrize("model", SCHEMA_KEYS, ids=lambda model: model.__name__)
 def test_every_model_is_frozen_and_slotted(model: type[DataclassInstance]) -> None:
-    assert model.__dataclass_params__.frozen  # type: ignore[attr-defined]  # ty: ignore[unresolved-attribute]
+    assert model.__dataclass_params__.frozen  # type: ignore[attr-defined]  # ty: ignore[missing-attribute]
     assert hasattr(model, "__slots__")
 
 

@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 from contextlib import chdir, closing
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from unittest.mock import MagicMock, patch
 from urllib.error import URLError
 from urllib.request import urlopen
@@ -65,10 +65,10 @@ def test_serve_rebuilds_and_recovers(tmp_path: Path) -> None:
 
     def get(path: str) -> bytes:
         with urlopen(url + path, timeout=1) as response:  # noqa: S310
-            return response.read()
+            return cast("bytes", response.read())
 
     def status() -> dict[str, object]:
-        return json.loads(get("/__neon/status"))
+        return cast("dict[str, object]", json.loads(get("/__neon/status")))
 
     try:
         _until(lambda: status()["revision"] == 1)

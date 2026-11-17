@@ -24,17 +24,27 @@ def test_preview_keeps_last_successful_generation(tmp_path: Path) -> None:
     preview = Preview(tmp_path, output)
     assert preview.rebuild()
     previous = preview.current
+    assert previous is not None
+    assert previous.parent.parent == output
+    assert previous.name == "site"
     assert preview.revision == 1
-    assert preview.read(lambda root: (root / "index.html").read_bytes()) is not None
+    assert b"First" in (previous / "index.html").read_bytes()
     page.write_text("[Broken](missing.md)", encoding="utf-8")
     assert not preview.rebuild()
     assert preview.current == previous
-    assert preview.error is not None
+    failure = preview.error
+    assert failure is not None
+    assert b"First" in (previous / "index.html").read_bytes()
     page.write_text("# Fixed", encoding="utf-8")
     assert preview.rebuild()
+    current = preview.current
+    assert current is not None
+    assert current != previous
+    assert current.parent.parent == output
+    assert current.name == "site"
+    assert b"Fixed" in (current / "index.html").read_bytes()
     assert preview.revision == 2
     assert preview.error is None
-    assert previous is not None
     assert not previous.exists()
     preview.stop()
     assert not preview.rebuild()

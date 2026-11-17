@@ -113,6 +113,7 @@ def _navigation(
         raise BuildFailedError(msg)
     result = []
     for item in entries:
+        value: object
         if isinstance(item, str):
             title, value = PurePosixPath(item).stem, item
         elif isinstance(item, dict) and len(item) == 1:
@@ -180,15 +181,15 @@ def build(config: Config, data: object) -> None:
         ):
             msg = "Each content.include entry needs 'src' and 'as' paths"
             raise BuildFailedError(msg)
-        target = _safe_path(entry["as"])
+        include_target = _safe_path(entry["as"])
         source = (docs / entry["src"]).resolve()
-        if target in files:
-            msg = f"Include target already exists: {target}"
+        if include_target in files:
+            msg = f"Include target already exists: {include_target}"
             raise BuildFailedError(msg)
         if not source.is_file():
             msg = f"Included file not found: {source}"
             raise BuildFailedError(msg)
-        files[target] = source
+        files[include_target] = source
     if any(
         output == source.resolve() or output in source.resolve().parents
         for source in files.values()
