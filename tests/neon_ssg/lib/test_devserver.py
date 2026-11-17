@@ -38,6 +38,17 @@ def server(tmp_path: Path) -> Iterator[tuple[Preview, str]]:
         thread.join()
 
 
+def test_server_start_does_not_resolve_hostname(tmp_path: Path) -> None:
+    preview = Preview(tmp_path, tmp_path)
+    with patch("socket.getfqdn", side_effect=AssertionError("unexpected lookup")):
+        http = PreviewServer(("127.0.0.1", 0), preview)
+    try:
+        assert http.server_name == "127.0.0.1"
+        assert http.server_port > 0
+    finally:
+        http.server_close()
+
+
 def test_preview_serves_identical_build_and_injects_reload(
     server: tuple[Preview, str], tmp_path: Path
 ) -> None:

@@ -159,12 +159,12 @@ notification connection. The worker owns configuration, imported plugins and
 build state. Keep the supervisor independent of project plugin imports so a
 plugin failure cannot prevent it from observing the next edit.
 
-| Changed input | Required behaviour |
-| --- | --- |
-| Content or templates | Rebuild affected output; refresh after success |
-| CSS or static assets | Update output; refresh or replace CSS after success |
-| Plugin Python code or site configuration | Replace worker, rebuild and refresh |
-| Dependency metadata or lockfile | Report that environment synchronisation is needed; require an explicit restart after synchronisation |
+| Changed input                            | Required behaviour                                                                                   |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Content or templates                     | Rebuild affected output; refresh after success                                                       |
+| CSS or static assets                     | Update output; refresh or replace CSS after success                                                  |
+| Plugin Python code or site configuration | Replace worker, rebuild and refresh                                                                  |
+| Dependency metadata or lockfile          | Report that environment synchronisation is needed; require an explicit restart after synchronisation |
 
 - Browser live reload is mandatory. Replacing CSS without a full page refresh
   is an enhancement, not a prerequisite for the first working version.

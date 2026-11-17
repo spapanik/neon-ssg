@@ -18,8 +18,8 @@ directory. Hidden files and directories in the documentation tree are skipped.
 
 ```yaml
 content:
-  docs_root: manual
-  site_root: public
+    docs_root: manual
+    site_root: public
 ```
 
 ## Navigation
@@ -30,12 +30,12 @@ If navigation is omitted, all Markdown pages are listed in path order.
 
 ```yaml
 site:
-  name: My documentation
+    name: My documentation
 content:
-  nav:
-    - Home: README.md
-    - Guides:
-        - Getting started: guides/start.md
+    nav:
+        - Home: README.md
+        - Guides:
+              - Getting started: guides/start.md
 ```
 
 Markdown links to other Markdown pages are rewritten to their generated HTML
@@ -48,9 +48,9 @@ Files outside the documentation directory can be included explicitly:
 
 ```yaml
 content:
-  include:
-    - src: ../LICENSE.md
-      as: LICENSE.md
+    include:
+        - src: ../LICENSE.md
+          as: LICENSE.md
 ```
 
 The `src` path is relative to the documentation directory and `as` is a

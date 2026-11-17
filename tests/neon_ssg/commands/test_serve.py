@@ -5,11 +5,12 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from contextlib import chdir, closing
 from typing import TYPE_CHECKING, cast
 from unittest.mock import MagicMock, patch
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 from neon_ssg.commands.serve import ServeCommand, _watch_paths
@@ -32,6 +33,8 @@ def _until(check: Callable[[], bool]) -> None:
         try:
             if check():
                 return
+        except HTTPError as exc:
+            exc.close()
         except (URLError, OSError, ValueError):
             pass
         time.sleep(0.05)
@@ -47,56 +50,91 @@ def test_serve_rebuilds_and_recovers(tmp_path: Path) -> None:
     with closing(socket.socket()) as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
-    process = subprocess.Popen(  # noqa: S603
-        [
-            sys.executable,
-            "-c",
-            (
-                "from neon_ssg.commands.serve import ServeCommand, _watch_paths; "
-                f"ServeCommand(0, '127.0.0.1', {port}).run()"
-            ),
-        ],
-        cwd=tmp_path,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
-    )
-    url = f"http://127.0.0.1:{port}"
-
-    def get(path: str) -> bytes:
-        with urlopen(url + path, timeout=1) as response:  # noqa: S310
-            return cast("bytes", response.read())
-
-    def status() -> dict[str, object]:
-        return cast("dict[str, object]", json.loads(get("/__neon/status")))
-
-    try:
-        _until(lambda: status()["revision"] == 1)
-        assert b"First" in get("/")
-        page.write_text("[Broken](missing.md)", encoding="utf-8")
-        _until(lambda: status()["error"] is not None)
-        assert b"First" in get("/")
-        page.write_text("# Fixed", encoding="utf-8")
-        _until(lambda: status()["revision"] == 2)
-        assert b"Fixed" in get("/")
-        extra = docs / "extra.md"
-        extra.write_text("# Extra", encoding="utf-8")
-        _until(lambda: status()["revision"] == 3)
-        assert b"Extra" in get("/extra/")
-        extra.unlink()
-        _until(lambda: status()["revision"] == 4)
-        (tmp_path / "uv.lock").write_text("changed", encoding="utf-8")
-        _until(lambda: status()["error"] is not None)
-        assert "restart" in str(status()["error"])
-        assert not (tmp_path / "site").exists()
-    finally:
-        process.send_signal(
-            getattr(signal, "CTRL_BREAK_EVENT", signal.SIGINT)
-            if sys.platform == "win32"
-            else signal.SIGINT
+    with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as log:
+        process = subprocess.Popen(  # noqa: S603
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import signal, sys; "
+                    "signal.signal(signal.SIGINT, signal.default_int_handler); "
+                    "signal.signal(signal.SIGBREAK, signal.default_int_handler) "
+                    "if sys.platform == 'win32' else None; "
+                    "from neon_ssg.commands.serve import ServeCommand; "
+                    f"ServeCommand(0, '127.0.0.1', {port}).run()"
+                ),
+            ],
+            cwd=tmp_path,
+            stdout=subprocess.DEVNULL,
+            stderr=log,
+            creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
         )
-        process.wait(timeout=10)
-    assert process.returncode == 0
+        url = f"http://127.0.0.1:{port}"
+
+        def get(path: str) -> bytes:
+            with urlopen(url + path, timeout=1) as response:  # noqa: S310
+                return cast("bytes", response.read())
+
+        def status() -> dict[str, object]:
+            return cast("dict[str, object]", json.loads(get("/__neon/status")))
+
+        def extra_deleted() -> bool:
+            try:
+                get("/extra/")
+            except HTTPError as exc:
+                try:
+                    return exc.code == 404
+                finally:
+                    exc.close()
+            return False
+
+        try:
+            _until(lambda: cast("int", status()["revision"]) >= 1)
+            assert b"First" in get("/")
+            page.write_text("[Broken](missing.md)", encoding="utf-8")
+            _until(lambda: status()["error"] is not None)
+            assert b"First" in get("/")
+            page.write_text("# Fixed", encoding="utf-8")
+            _until(lambda: status()["error"] is None and b"Fixed" in get("/"))
+            assert b"Fixed" in get("/")
+            extra = docs / "extra.md"
+            extra.write_text("# Extra", encoding="utf-8")
+            _until(lambda: b"Extra" in get("/extra/"))
+            assert b"Extra" in get("/extra/")
+            before_delete = cast("int", status()["revision"])
+            extra.unlink()
+            _until(
+                lambda: (
+                    cast("int", status()["revision"]) > before_delete
+                    and extra_deleted()
+                )
+            )
+            (tmp_path / "uv.lock").write_text("changed", encoding="utf-8")
+            _until(lambda: status()["error"] is not None)
+            assert "restart" in str(status()["error"])
+            assert not (tmp_path / "site").exists()
+        finally:
+            failure = sys.exception()
+            try:
+                if process.poll() is None:
+                    process.send_signal(
+                        getattr(signal, "CTRL_BREAK_EVENT", signal.SIGINT)
+                        if sys.platform == "win32"
+                        else signal.SIGINT
+                    )
+                    process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=10)
+                if failure is None:
+                    raise
+                failure.add_note("The preview also timed out during shutdown.")
+            finally:
+                log.seek(0)
+                output = log.read()
+                if failure is not None:
+                    failure.add_note(f"Preview output:\n{output}")
+        assert process.returncode == 0, output
 
 
 def test_watch_paths_include_external_sources(tmp_path: Path) -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import socketserver
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, cast
@@ -44,6 +45,13 @@ class PreviewServer(ThreadingHTTPServer):
     def __init__(self, address: tuple[str, int], preview: Preview) -> None:
         self.preview = preview
         super().__init__(address, PreviewHandler)
+
+    def server_bind(self) -> None:
+        """Bind without a reverse-DNS lookup for the local preview address."""
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = cast(
+            "tuple[str, int]", self.server_address
+        )
 
 
 class PreviewHandler(BaseHTTPRequestHandler):
