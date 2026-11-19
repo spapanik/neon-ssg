@@ -82,6 +82,25 @@ def test_waiting_and_unsafe_path(server: tuple[Preview, str]) -> None:
     assert exc.value.code == 404
 
 
+def test_status_polls_do_not_clutter_request_logs(
+    server: tuple[Preview, str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    preview, url = server
+    assert preview.rebuild()
+    with urlopen(url + "/__neon/status?check=1", timeout=3) as response:  # noqa: S310
+        assert response.status == 200
+    assert capsys.readouterr().err == ""
+
+    with urlopen(url + "/", timeout=3) as response:  # noqa: S310
+        assert response.status == 200
+    with pytest.raises(HTTPError) as exc, urlopen(url + "/missing", timeout=3):  # noqa: S310
+        pass
+    exc.value.close()
+    logged = capsys.readouterr().err
+    assert '"GET / HTTP/1.1" 200' in logged
+    assert '"GET /missing HTTP/1.1" 404' in logged
+
+
 def test_resolved_path_outside_generation_is_rejected(
     server: tuple[Preview, str], tmp_path: Path
 ) -> None:

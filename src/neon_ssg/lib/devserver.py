@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import socketserver
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, cast
@@ -55,6 +56,15 @@ class PreviewServer(ThreadingHTTPServer):
 
 
 class PreviewHandler(BaseHTTPRequestHandler):
+    def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
+        if (
+            self.command == "GET"
+            and code == HTTPStatus.OK
+            and urlsplit(self.path).path == "/__neon/status"
+        ):
+            return
+        super().log_request(code, size)
+
     def do_GET(self) -> None:
         server = cast("PreviewServer", self.server)
         path = urlsplit(self.path).path
