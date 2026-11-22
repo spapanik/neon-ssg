@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import os
+import posixpath
 import shutil
 import tempfile
 from html import escape
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 import markdown
 from jinja2 import Environment, select_autoescape
@@ -52,7 +52,8 @@ def page_path(source: PurePosixPath) -> PurePosixPath:
 
 
 def _relative_url(origin: PurePosixPath, target: PurePosixPath) -> str:
-    return os.path.relpath(str(target), str(origin.parent)).replace(os.sep, "/")
+    relative = posixpath.relpath(str(target.parent), str(origin.parent))
+    return f"{quote(relative, safe='/')}/"
 
 
 class _Links(Treeprocessor):
@@ -69,7 +70,9 @@ class _Links(Treeprocessor):
             parts = urlsplit(href)
             if parts.scheme or parts.netloc or not parts.path.endswith(".md"):
                 continue
-            path = PurePosixPath(os.path.normpath(str(self.origin.parent / parts.path)))
+            path = PurePosixPath(
+                posixpath.normpath(str(self.origin.parent / unquote(parts.path)))
+            )
             if path not in self.pages:
                 msg = f"{self.origin}: linked page not found: {parts.path}"
                 raise BuildFailedError(msg)

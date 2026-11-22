@@ -43,6 +43,10 @@ paths. Missing linked pages and navigation targets fail the build. Other files
 are copied as assets. `index.md` and `README.md` produce `index.html` in their
 containing directory; other Markdown files produce a directory with an
 `index.html` inside it. Inputs that map to the same output cause an error.
+Generated navigation and Markdown links use relative directory URLs such as
+`installation/` rather than links ending in `index.html`. Static hosts must
+serve directory indexes for these links; the preview server redirects directory
+requests without a trailing slash to the corresponding URL with one.
 
 Files outside the documentation directory can be included explicitly:
 

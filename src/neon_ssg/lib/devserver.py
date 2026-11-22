@@ -9,7 +9,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, cast
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -67,7 +67,8 @@ class PreviewHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         server = cast("PreviewServer", self.server)
-        path = urlsplit(self.path).path
+        parts = urlsplit(self.path)
+        path = parts.path
         if path == "/__neon/status":
             with server.preview.lock:
                 payload = json.dumps(
@@ -80,17 +81,20 @@ class PreviewHandler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
 
-        def read(root: Path) -> tuple[bytes, str, int]:
+        def read(root: Path) -> tuple[bytes, str, int, bool]:
             root = root.resolve()
             target = (root / relative).resolve()
             if not target.is_relative_to(root):
                 raise FileNotFoundError
             if target.is_dir():
+                if not path.endswith("/"):
+                    return b"", "", server.preview.revision, True
                 target = target / "index.html"
             return (
                 target.read_bytes(),
                 mimetypes.guess_type(target.name)[0] or "application/octet-stream",
                 server.preview.revision,
+                False,
             )
 
         try:
@@ -108,7 +112,14 @@ class PreviewHandler(BaseHTTPRequestHandler):
             )
             revision = 0
         else:
-            payload, content_type, revision = result
+            payload, content_type, revision, redirect = result
+            if redirect:
+                location = urlunsplit(("", "", path + "/", parts.query, ""))
+                self.send_response(HTTPStatus.MOVED_PERMANENTLY)
+                self.send_header("Location", location)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
         if content_type == "text/html":
             payload += SCRIPT.replace(
                 b"__NEON_REVISION__", str(revision).encode("ascii")

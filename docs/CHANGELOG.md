@@ -12,6 +12,11 @@ The format is based on [Keep a Changelog], and this project adheres to [Semantic
   after a successful build. Failed builds leave the last successful preview
   available.
 
+### Changed
+
+- Use relative directory URLs in generated links, and redirect directory
+  requests without a trailing slash in the preview server.
+
 ## [0.1.0]
 
 ### Added

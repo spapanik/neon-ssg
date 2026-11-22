@@ -28,9 +28,27 @@ def test_build_renders_navigation_and_rewrites_links(tmp_path: Path) -> None:
         BuildCommand(verbosity=0).run()
     home = (tmp_path / "site" / "index.html").read_text(encoding="utf-8")
     guide = (tmp_path / "site" / "guide" / "index.html").read_text(encoding="utf-8")
-    assert '<a href="guide/index.html">Guide</a>' in home
-    assert '<a href="../index.html">Home</a>' in guide
+    assert '<a href="guide/">Guide</a>' in home
+    assert '<a href="../">Home</a>' in guide
     assert '<h1 id="guide">Guide</h1>' in guide
+
+
+def test_nested_links_keep_queries_and_fragments(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    (docs / "guide").mkdir(parents=True)
+    (docs / "README.md").write_text("# Home", encoding="utf-8")
+    (docs / "guide" / "index.md").write_text(
+        "# Guide\n\n[Home](../README.md?view=full#top)\n"
+        "[Next](next%20steps.md#section)\n",
+        encoding="utf-8",
+    )
+    (docs / "guide" / "next steps.md").write_text("# Next", encoding="utf-8")
+    with chdir(tmp_path):
+        BuildCommand(verbosity=0).run()
+    guide = (tmp_path / "site" / "guide" / "index.html").read_text(encoding="utf-8")
+    assert 'href="../?view=full#top"' in guide
+    assert 'href="next%20steps/#section"' in guide
+    assert (tmp_path / "site" / "guide" / "next steps" / "index.html").is_file()
 
 
 def test_failed_build_preserves_previous_output(tmp_path: Path) -> None:

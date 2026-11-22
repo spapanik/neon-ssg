@@ -9,7 +9,7 @@ from xml.etree.ElementTree import Element, SubElement
 
 import pytest
 
-from neon_ssg.lib.build import _Links, _navigation, _safe_path, build
+from neon_ssg.lib.build import _Links, _navigation, _relative_url, _safe_path, build
 from neon_ssg.lib.config import Config, resolve_config
 from neon_ssg.lib.diagnostics import DiagnosticCollector
 from neon_ssg.lib.exceptions import BuildFailedError
@@ -51,6 +51,20 @@ def test_links_ignore_non_markdown() -> None:
         if href is not None:
             a.set("href", href)
     _Links(PurePosixPath("index.md"), set()).run(root)
+
+
+@pytest.mark.parametrize(
+    ("origin", "target", "expected"),
+    [
+        ("index.html", "index.html", "./"),
+        ("index.html", "installation/index.html", "installation/"),
+        ("installation/index.html", "index.html", "../"),
+        ("a/b/index.html", "a/c/index.html", "../c/"),
+        ("index.html", "a b/#guide/index.html", "a%20b/%23guide/"),
+    ],
+)
+def test_relative_page_urls(origin: str, target: str, expected: str) -> None:
+    assert _relative_url(PurePosixPath(origin), PurePosixPath(target)) == expected
 
 
 @pytest.mark.parametrize(

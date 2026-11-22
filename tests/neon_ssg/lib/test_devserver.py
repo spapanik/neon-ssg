@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import threading
 from contextlib import chdir
+from http.client import HTTPConnection
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import patch
@@ -99,6 +100,26 @@ def test_status_polls_do_not_clutter_request_logs(
     logged = capsys.readouterr().err
     assert '"GET / HTTP/1.1" 200' in logged
     assert '"GET /missing HTTP/1.1" 404' in logged
+
+
+def test_directory_request_redirects_and_keeps_query(
+    server: tuple[Preview, str], tmp_path: Path
+) -> None:
+    preview, url = server
+    (tmp_path / "docs" / "installation.md").write_text("# Install", encoding="utf-8")
+    assert preview.rebuild()
+    port = int(url.rsplit(":", maxsplit=1)[1])
+    connection = HTTPConnection("127.0.0.1", port, timeout=3)
+    try:
+        connection.request("GET", "/installation?view=full")
+        response = connection.getresponse()
+        assert response.status == 301
+        assert response.getheader("Location") == "/installation/?view=full"
+        assert response.read() == b""
+    finally:
+        connection.close()
+    with urlopen(url + "/installation/", timeout=3) as response:  # noqa: S310
+        assert b"Install" in response.read()
 
 
 def test_resolved_path_outside_generation_is_rejected(
