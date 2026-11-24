@@ -105,8 +105,8 @@ def test_duplicate_and_missing_include(site: Config, tmp_path: Path) -> None:
         build(site, {"content": {"include": [{"src": "x.md", "as": "x.md"}]}})
     (tmp_path / "docs" / "index.md").write_text("# X", encoding="utf-8")
     (tmp_path / "docs" / "README.md").write_text("# X", encoding="utf-8")
-    with pytest.raises(BuildFailedError, match="same output"):
-        build(site, {})
+    build(site, {})
+    assert (tmp_path / "site" / "index.html").is_file()
 
 
 def test_assets_and_replacement(site: Config, tmp_path: Path) -> None:

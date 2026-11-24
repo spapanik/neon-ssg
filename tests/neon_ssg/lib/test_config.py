@@ -35,6 +35,8 @@ SCHEMA_KEYS: dict[type[DataclassInstance], set[str]] = {
         "nav",
         "exclude",
         "not_found",
+        "remove_prefix",
+        "remove_suffix",
     },
     IncludeEntry: {"src", "target"},
     NavEntry: {"title", "target", "children"},

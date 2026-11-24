@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import posixpath
+import re
 import shutil
 import tempfile
 from html import escape
@@ -45,10 +46,36 @@ img{max-width:100%}
 """
 
 
-def page_path(source: PurePosixPath) -> PurePosixPath:
-    if source.name.lower() in {"index.md", "readme.md"}:
-        return source.parent / "index.html"
-    return source.with_suffix("") / "index.html"
+def _clean_component(
+    part: str, source: PurePosixPath, prefix: str | None, suffix: str | None
+) -> str:
+    if prefix is not None:
+        match = re.match(prefix, part)
+        if match:
+            part = part[match.end() :]
+    if suffix is not None:
+        matches = (
+            match for match in re.finditer(suffix, part) if match.end() == len(part)
+        )
+        match = next(matches, None)
+        if match:
+            part = part[: match.start()]
+    if not part or part in {".", ".."} or "/" in part or "\\" in part:
+        msg = f"Invalid output path component for {source}: {part!r}"
+        raise BuildFailedError(msg)
+    return part
+
+
+def page_path(
+    source: PurePosixPath, prefix: str | None = None, suffix: str | None = None
+) -> PurePosixPath:
+    parts = [
+        _clean_component(part, source, prefix, suffix) for part in source.parts[:-1]
+    ]
+    name = _clean_component(source.stem, source, prefix, suffix)
+    if name.lower() not in {"index", "readme"}:
+        parts.append(name)
+    return PurePosixPath(*parts, "index.html")
 
 
 def _relative_url(origin: PurePosixPath, target: PurePosixPath) -> str:
@@ -57,32 +84,64 @@ def _relative_url(origin: PurePosixPath, target: PurePosixPath) -> str:
 
 
 class _Links(Treeprocessor):
-    def __init__(self, origin: PurePosixPath, pages: set[PurePosixPath]) -> None:
+    def __init__(
+        self,
+        origin: PurePosixPath,
+        pages: set[PurePosixPath],
+        outputs: dict[PurePosixPath, PurePosixPath] | None = None,
+    ) -> None:
         super().__init__()
         self.origin = origin
         self.pages = pages
+        self.outputs = outputs or {page: page_path(page) for page in pages}
 
     def run(self, root: Element) -> None:
-        for element in root.iter("a"):
-            href = element.get("href")
+        for element in root.iter():
+            attribute = (
+                "src"
+                if element.tag == "img"
+                else "href"
+                if element.tag == "a"
+                else None
+            )
+            if attribute is None:
+                continue
+            href = element.get(attribute)
             if not href:
                 continue
             parts = urlsplit(href)
-            if parts.scheme or parts.netloc or not parts.path.endswith(".md"):
+            if (
+                parts.scheme
+                or parts.netloc
+                or not parts.path
+                or parts.path.startswith("/")
+            ):
                 continue
             path = PurePosixPath(
                 posixpath.normpath(str(self.origin.parent / unquote(parts.path)))
             )
-            if path not in self.pages:
+            if path not in self.outputs and parts.path.lower().endswith(".md"):
                 msg = f"{self.origin}: linked page not found: {parts.path}"
                 raise BuildFailedError(msg)
+            if path not in self.outputs:
+                continue
+            target = self.outputs[path]
+            if path in self.pages:
+                url = _relative_url(self.outputs[self.origin], target)
+            else:
+                url = quote(
+                    posixpath.relpath(
+                        str(target), str(self.outputs[self.origin].parent)
+                    ),
+                    safe="/",
+                )
             element.set(
-                "href",
+                attribute,
                 urlunsplit(
                     (
                         "",
                         "",
-                        _relative_url(page_path(self.origin), page_path(path)),
+                        url,
                         parts.query,
                         parts.fragment,
                     )
@@ -91,13 +150,21 @@ class _Links(Treeprocessor):
 
 
 class _LinkExtension(Extension):
-    def __init__(self, origin: PurePosixPath, pages: set[PurePosixPath]) -> None:
+    def __init__(
+        self,
+        origin: PurePosixPath,
+        pages: set[PurePosixPath],
+        outputs: dict[PurePosixPath, PurePosixPath] | None = None,
+    ) -> None:
         super().__init__()
         self.origin = origin
         self.pages = pages
+        self.outputs = outputs or {page: page_path(page) for page in pages}
 
     def extendMarkdown(self, md: markdown.Markdown) -> None:  # noqa: N802
-        md.treeprocessors.register(_Links(self.origin, self.pages), "neon_links", 5)
+        md.treeprocessors.register(
+            _Links(self.origin, self.pages, self.outputs), "neon_links", 5
+        )
 
 
 def _safe_path(value: str) -> PurePosixPath:
@@ -109,11 +176,16 @@ def _safe_path(value: str) -> PurePosixPath:
 
 
 def _navigation(
-    entries: object, pages: set[PurePosixPath], origin: PurePosixPath
+    entries: object,
+    pages: set[PurePosixPath],
+    origin: PurePosixPath,
+    outputs: dict[PurePosixPath, PurePosixPath] | None = None,
+    indexes: dict[PurePosixPath, PurePosixPath] | None = None,
 ) -> str:
     if not isinstance(entries, list):
         msg = "content.nav must be a list"
         raise BuildFailedError(msg)
+    outputs = outputs or {page: page_path(page) for page in pages}
     result = []
     for item in entries:
         value: object
@@ -128,17 +200,48 @@ def _navigation(
             msg = f"Invalid navigation entry: {item!r}"
             raise BuildFailedError(msg)
         if isinstance(value, list):
-            result.append(
-                f"<li>{escape(title)}{_navigation(value, pages, origin)}</li>"
+            # A bare directory-index entry becomes the group link. An explicit
+            # label keeps its own entry and takes precedence over this behaviour.
+            index_pages = set(indexes or {})
+            explicit = {
+                _safe_path(target)
+                for child in value
+                if isinstance(child, dict) and len(child) == 1
+                for target in child.values()
+                if isinstance(target, str)
+            }
+            candidates = [
+                _safe_path(child)
+                for child in value
+                if isinstance(child, str) and _safe_path(child) in index_pages
+            ]
+            target = next(
+                (
+                    candidate
+                    for candidate in candidates
+                    if not any(
+                        outputs.get(explicit_page) == outputs.get(candidate)
+                        for explicit_page in explicit
+                    )
+                ),
+                None,
             )
+            children = value
+            label = escape(title)
+            if target is not None:
+                url = escape(
+                    _relative_url(outputs[origin], outputs[target]), quote=True
+                )
+                label = f'<a href="{url}">{label}</a>'
+                children = [child for child in value if child != str(target)]
+            nested = _navigation(children, pages, origin, outputs, indexes)
+            result.append(f"<li>{label}{nested}</li>")
         elif isinstance(value, str):
             target = _safe_path(value)
             if target not in pages:
                 msg = f"Navigation page not found: {value}"
                 raise BuildFailedError(msg)
-            url = escape(
-                _relative_url(page_path(origin), page_path(target)), quote=True
-            )
+            url = escape(_relative_url(outputs[origin], outputs[target]), quote=True)
             result.append(f'<li><a href="{url}">{escape(title)}</a></li>')
         else:
             msg = f"Invalid navigation entry: {item!r}"
@@ -200,11 +303,40 @@ def build(config: Config, data: object) -> None:
         msg = "The output directory contains a source file"
         raise BuildFailedError(msg)
     pages = {path for path in files if path.suffix.lower() == ".md"}
-    outputs = [page_path(path) if path in pages else path for path in files]
-    if len(set(outputs)) != len(outputs) or PurePosixPath(MARKER) in outputs:
+    outputs = {
+        path: page_path(
+            path, config.content.remove_prefix, config.content.remove_suffix
+        )
+        if path in pages
+        else path
+        for path in files
+    }
+    # Only index candidates from the same source directory may share an output.
+    indexes: dict[PurePosixPath, PurePosixPath] = {}
+    candidates: dict[PurePosixPath, list[tuple[int, PurePosixPath]]] = {}
+    for path in pages:
+        name = _clean_component(
+            path.stem, path, config.content.remove_prefix, config.content.remove_suffix
+        ).lower()
+        if name in {"index", "readme"}:
+            candidates.setdefault(path.parent, []).append(
+                (0 if name == "index" else 1, path)
+            )
+    skipped: set[PurePosixPath] = set()
+    for group in candidates.values():
+        winner = min(group)[1]
+        for _, path in group:
+            indexes[path] = winner
+            if path != winner:
+                skipped.add(path)
+                outputs[path] = outputs[winner]
+    published = [
+        output_path for path, output_path in outputs.items() if path not in skipped
+    ]
+    if len(set(published)) != len(published) or PurePosixPath(MARKER) in published:
         msg = "Multiple inputs would produce the same output path"
         raise BuildFailedError(msg)
-    nav = content.get("nav", [str(path) for path in sorted(pages)])
+    nav = content.get("nav", [str(path) for path in sorted(pages - skipped)])
     template = Environment(autoescape=select_autoescape(default=True)).from_string(
         TEMPLATE
     )
@@ -213,14 +345,19 @@ def build(config: Config, data: object) -> None:
         staging = Path(tmp) / "site"
         staging.mkdir()
         for path, source in files.items():
-            target = staging / (page_path(path) if path in pages else path)
+            if path in skipped:
+                continue
+            target = staging / outputs[path]
             target.parent.mkdir(parents=True, exist_ok=True)
             if path not in pages:
                 shutil.copyfile(source, target)
                 continue
             text = source.read_text(encoding="utf-8")
             converter = markdown.Markdown(
-                extensions=[*config.markdown.extensions, _LinkExtension(path, pages)]
+                extensions=[
+                    *config.markdown.extensions,
+                    _LinkExtension(path, pages, outputs),
+                ]
             )
             html = converter.convert(text)
             title = next(
@@ -235,7 +372,7 @@ def build(config: Config, data: object) -> None:
                 title=title,
                 site_name=config.site.name,
                 language=config.i18n.default,
-                navigation=Markup(_navigation(nav, pages, path)),  # noqa: S704
+                navigation=Markup(_navigation(nav, pages, path, outputs, indexes)),  # noqa: S704
                 content=Markup(html),  # noqa: S704
             )
             target.write_text(rendered, encoding="utf-8")

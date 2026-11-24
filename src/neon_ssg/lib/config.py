@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -91,6 +92,8 @@ class ContentConfig:
     nav: tuple[NavEntry, ...] | None
     exclude: tuple[str, ...]
     not_found: PurePosixPath
+    remove_prefix: str | None = None
+    remove_suffix: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -329,6 +332,14 @@ def _locale_codes(parser: ConfigParser) -> tuple[str, ...]:
     return codes or ("en",)
 
 
+def _regex(value: object) -> None:
+    try:
+        re.compile(as_str(value))
+    except re.error as exc:
+        msg = f"must be a valid regular expression: {exc}"
+        raise ValueError(msg) from exc
+
+
 def resolve_config(
     source: ConfigSource,
     collector: DiagnosticCollector,
@@ -369,6 +380,12 @@ def resolve_config(
         nav=None,
         exclude=(),
         not_found=PurePosixPath(not_found),
+        remove_prefix=resolver.optional(
+            "content.remove_prefix", rtype=as_str, validator=_regex
+        ),
+        remove_suffix=resolver.optional(
+            "content.remove_suffix", rtype=as_str, validator=_regex
+        ),
     )
 
     repo_present = _repo_is_present(source.parser, supplied_cli_values)

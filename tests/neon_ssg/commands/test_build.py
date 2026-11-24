@@ -112,3 +112,114 @@ def test_main_reports_build_failure(capsys: pytest.CaptureFixture[str]) -> None:
     ):
         main()
     assert capsys.readouterr().err == "bad\n"
+
+
+def test_configurable_path_cleanup_and_asset_links(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    section = docs / "01-phonology"
+    section.mkdir(parents=True)
+    (docs / "00-index.md").write_text(
+        "# Arcadia\n\n[Guide](01-phonology/00-index.md)", encoding="utf-8"
+    )
+    (section / "00-index.md").write_text(
+        "# Guide\n\n![Diagram](diagram.png)\n\n[Home](../00-index.md)", encoding="utf-8"
+    )
+    (section / "diagram.png").write_bytes(b"image")
+    (tmp_path / "neon-ssg.yaml").write_text(
+        "content:\n  remove_prefix: '\\d\\d-'\n  nav:\n"
+        "    - Home: 00-index.md\n    - Guide: 01-phonology/00-index.md\n",
+        encoding="utf-8",
+    )
+    with chdir(tmp_path):
+        BuildCommand(0).run()
+    home = (tmp_path / "site/index.html").read_text(encoding="utf-8")
+    guide = (tmp_path / "site/phonology/index.html").read_text(encoding="utf-8")
+    assert 'href="phonology/"' in home
+    assert 'href="../">Home</a>' in guide
+    assert 'src="../01-phonology/diagram.png"' in guide
+    assert (tmp_path / "site/01-phonology/diagram.png").is_file()
+
+
+def test_suffix_cleanup_and_collisions(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "index-00.md").write_text("# Home", encoding="utf-8")
+    config = tmp_path / "neon-ssg.yaml"
+    config.write_text("content:\n  remove_suffix: '-\\d\\d'\n", encoding="utf-8")
+    with chdir(tmp_path):
+        BuildCommand(0).run()
+        assert (tmp_path / "site/index.html").exists()
+        (docs / "index.md").write_text("# Duplicate", encoding="utf-8")
+        BuildCommand(0).run()
+        assert "Home" in (tmp_path / "site/index.html").read_text(encoding="utf-8")
+        (docs / "guide-01.md").write_text("# One", encoding="utf-8")
+        (docs / "guide-02.md").write_text("# Two", encoding="utf-8")
+        with pytest.raises(BuildFailedError, match="same output"):
+            BuildCommand(0).run()
+
+
+def test_invalid_cleanup_pattern_is_configuration_error(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "neon-ssg.yaml").write_text(
+        "content:\n  remove_prefix: '['\n", encoding="utf-8"
+    )
+    with chdir(tmp_path), pytest.raises(BuildFailedError):
+        BuildCommand(0).run()
+
+
+def test_section_index_links_and_explicit_labels(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    section = docs / "01-phonology"
+    section.mkdir(parents=True)
+    (docs / "index.md").write_text("# Home", encoding="utf-8")
+    (section / "00-index.md").write_text("# Introduction", encoding="utf-8")
+    (section / "01-letters.md").write_text("# Letters", encoding="utf-8")
+    config = tmp_path / "neon-ssg.yaml"
+    config.write_text(
+        "content:\n  remove_prefix: '\\d\\d-'\n  nav:\n"
+        "    - Home: index.md\n    - Phonology:\n"
+        "        - 01-phonology/00-index.md\n"
+        "        - Letters: 01-phonology/01-letters.md\n",
+        encoding="utf-8",
+    )
+    with chdir(tmp_path):
+        BuildCommand(0).run()
+        html = (tmp_path / "site/index.html").read_text(encoding="utf-8")
+        assert '<a href="phonology/">Phonology</a>' in html
+        assert ">00-index</a>" not in html
+        assert '<a href="phonology/letters/">Letters</a>' in html
+        config.write_text(
+            config.read_text(encoding="utf-8").replace(
+                "- 01-phonology/00-index.md", "- Overview: 01-phonology/00-index.md"
+            ),
+            encoding="utf-8",
+        )
+        BuildCommand(0).run()
+    html = (tmp_path / "site/index.html").read_text(encoding="utf-8")
+    assert "<li>Phonology<ul>" in html
+    assert '<a href="phonology/">Overview</a>' in html
+
+
+def test_index_selection_and_alias_links(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    for name in ("02-index.md", "01-index.md", "00-README.md", "03-README.md"):
+        (docs / name).write_text(f"# {name}", encoding="utf-8")
+    (docs / "other.md").write_text("[Readme](00-README.md)", encoding="utf-8")
+    (tmp_path / "neon-ssg.yaml").write_text(
+        "content:\n  remove_prefix: '\\d\\d-'\n", encoding="utf-8"
+    )
+    with chdir(tmp_path):
+        BuildCommand(0).run()
+        assert "01-index.md" in (tmp_path / "site/index.html").read_text(
+            encoding="utf-8"
+        )
+        assert 'href="../"' in (tmp_path / "site/other/index.html").read_text(
+            encoding="utf-8"
+        )
+        (docs / "01-index.md").unlink()
+        (docs / "02-index.md").unlink()
+        BuildCommand(0).run()
+        assert "00-README.md" in (tmp_path / "site/index.html").read_text(
+            encoding="utf-8"
+        )
