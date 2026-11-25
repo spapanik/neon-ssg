@@ -30,7 +30,9 @@ TEMPLATE = """<!doctype html>
 <title>{{ title }}
 · {{ site_name }}</title>
 <style>body{font:16px/1.6 system-ui,sans-serif;margin:0;color:#202334}
-header{background:#252044;color:white;padding:1rem 2rem;font-weight:bold}
+header{background:#252044;color:white;padding:1rem 2rem;font-weight:bold;
+display:flex;align-items:center;gap:.75rem}
+header img{max-height:2.5rem;width:auto}
 .layout{display:flex;gap:2rem;max-width:80rem;margin:auto;padding:2rem}
 nav{min-width:14rem}
 nav ul{list-style:none;padding-left:1rem}
@@ -39,8 +41,14 @@ a{color:#6142a6}
 main{min-width:0;max-width:55rem}
 pre{overflow:auto;background:#f3f2f8;padding:1rem}
 img{max-width:100%}
-@media(max-width:700px){.layout{display:block}}</style></head>
-<body><header>{{ site_name }}</header><div class="layout">
+@media(max-width:700px){.layout{display:block}}</style>
+{% if favicon %}<link rel="icon" href="{{ favicon }}">
+{% endif %}{% for css in stylesheets %}<link rel="stylesheet" href="{{ css }}">
+{% endfor %}{% for js in scripts %}<script defer src="{{ js }}"></script>
+{% endfor %}</head>
+<body><header>
+{% if logo %}<img src="{{ logo }}" alt="">{% endif %}{{ site_name }}</header>
+<div class="layout">
 <nav aria-label="Site navigation">{{ navigation }}</nav>
 <main>{{ content }}</main></div></body></html>
 """
@@ -302,7 +310,18 @@ def build(config: Config, data: object) -> None:
     ):
         msg = "The output directory contains a source file"
         raise BuildFailedError(msg)
-    pages = {path for path in files if path.suffix.lower() == ".md"}
+    asset_root = PurePosixPath(config.content.assets)
+    files = {
+        path: source
+        for path, source in files.items()
+        if asset_root not in path.parents
+        or path.parts[1] in {"img", "css", "js", "fonts"}
+    }
+    pages = {
+        path
+        for path in files
+        if path.suffix.lower() == ".md" and asset_root not in path.parents
+    }
     outputs = {
         path: page_path(
             path, config.content.remove_prefix, config.content.remove_suffix
@@ -336,6 +355,24 @@ def build(config: Config, data: object) -> None:
     if len(set(published)) != len(published) or PurePosixPath(MARKER) in published:
         msg = "Multiple inputs would produce the same output path"
         raise BuildFailedError(msg)
+    image_paths: dict[str, PurePosixPath] = {}
+    for name, value in (("logo", config.theme.logo), ("favicon", config.theme.favicon)):
+        if value is not None:
+            image_path = asset_root / "img" / value
+            if image_path not in files:
+                msg = f"theme.{name}: image not found: {docs / image_path}"
+                raise BuildFailedError(msg)
+            image_paths[name] = image_path
+    stylesheets = sorted(
+        path
+        for path in files
+        if asset_root / "css" in path.parents and path.suffix.lower() == ".css"
+    )
+    scripts = sorted(
+        path
+        for path in files
+        if asset_root / "js" in path.parents and path.suffix.lower() == ".js"
+    )
     nav = content.get("nav", [str(path) for path in sorted(pages - skipped)])
     template = Environment(autoescape=select_autoescape(default=True)).from_string(
         TEMPLATE
@@ -372,6 +409,40 @@ def build(config: Config, data: object) -> None:
                 title=title,
                 site_name=config.site.name,
                 language=config.i18n.default,
+                logo=(
+                    quote(
+                        posixpath.relpath(
+                            str(image_paths["logo"]), str(outputs[path].parent)
+                        ),
+                        safe="/",
+                    )
+                    if "logo" in image_paths
+                    else None
+                ),
+                favicon=(
+                    quote(
+                        posixpath.relpath(
+                            str(image_paths["favicon"]), str(outputs[path].parent)
+                        ),
+                        safe="/",
+                    )
+                    if "favicon" in image_paths
+                    else None
+                ),
+                stylesheets=[
+                    quote(
+                        posixpath.relpath(str(asset), str(outputs[path].parent)),
+                        safe="/",
+                    )
+                    for asset in stylesheets
+                ],
+                scripts=[
+                    quote(
+                        posixpath.relpath(str(asset), str(outputs[path].parent)),
+                        safe="/",
+                    )
+                    for asset in scripts
+                ],
                 navigation=Markup(_navigation(nav, pages, path, outputs, indexes)),  # noqa: S704
                 content=Markup(html),  # noqa: S704
             )

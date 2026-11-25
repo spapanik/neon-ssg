@@ -94,6 +94,7 @@ class ContentConfig:
     not_found: PurePosixPath
     remove_prefix: str | None = None
     remove_suffix: str | None = None
+    assets: str = "assets"
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,8 +113,8 @@ class ThemeConfig:
     features: frozenset[str]
     palette: Mapping[str, str]
     icons: Mapping[str, str]
-    logo: Path | None
-    favicon: Path | None
+    logo: PurePosixPath | None
+    favicon: PurePosixPath | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,6 +333,28 @@ def _locale_codes(parser: ConfigParser) -> tuple[str, ...]:
     return codes or ("en",)
 
 
+def _asset_directory(value: object) -> None:
+    name = as_str(value)
+    if not name or name.startswith(".") or "/" in name or "\\" in name or ":" in name:
+        msg = "must be a single, non-hidden directory name"
+        raise ValueError(msg)
+
+
+def _image_path(value: object) -> None:
+    name = as_str(value)
+    path = PurePosixPath(name)
+    if (
+        not name
+        or path.is_absolute()
+        or not path.parts
+        or ".." in path.parts
+        or "\\" in name
+        or ":" in name
+    ):
+        msg = "must be a relative file path within the assets img directory"
+        raise ValueError(msg)
+
+
 def _regex(value: object) -> None:
     try:
         re.compile(as_str(value))
@@ -380,6 +403,9 @@ def resolve_config(
         nav=None,
         exclude=(),
         not_found=PurePosixPath(not_found),
+        assets=resolver.setting(
+            "content.assets", rtype=as_str, default="assets", validator=_asset_directory
+        ),
         remove_prefix=resolver.optional(
             "content.remove_prefix", rtype=as_str, validator=_regex
         ),
@@ -422,6 +448,8 @@ def resolve_config(
         else None
     )
 
+    logo = resolver.optional("theme.logo", rtype=as_str, validator=_image_path)
+    favicon = resolver.optional("theme.favicon", rtype=as_str, validator=_image_path)
     theme = ThemeConfig(
         name=resolver.setting(
             "theme.name", rtype=as_str, default="neon", validator=non_empty
@@ -432,8 +460,8 @@ def resolve_config(
         features=DEFAULT_THEME_FEATURES,
         palette={},
         icons={},
-        logo=_resolved_path(root, resolver.optional("theme.logo", rtype=as_str)),
-        favicon=_resolved_path(root, resolver.optional("theme.favicon", rtype=as_str)),
+        logo=None if logo is None else PurePosixPath(logo),
+        favicon=None if favicon is None else PurePosixPath(favicon),
     )
 
     markdown = MarkdownConfig(

@@ -223,3 +223,104 @@ def test_index_selection_and_alias_links(tmp_path: Path) -> None:
         assert "00-README.md" in (tmp_path / "site/index.html").read_text(
             encoding="utf-8"
         )
+
+
+def test_custom_assets_are_included_on_all_pages(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    for folder in (
+        "01-files/css/nested",
+        "01-files/js",
+        "01-files/img",
+        "01-files/ts",
+        "01-files/lua",
+        "01-files/fonts",
+        "01-guide",
+    ):
+        (docs / folder).mkdir(parents=True, exist_ok=True)
+    (docs / "00-index.md").write_text(
+        "# Home\n\n![Logo](01-files/img/logo.png)", encoding="utf-8"
+    )
+    (docs / "01-guide/00-index.md").write_text("# Guide", encoding="utf-8")
+    (docs / "01-files/css/a.css").write_text("body {color: red}", encoding="utf-8")
+    (docs / "01-files/css/nested/b.css").write_text(
+        "body {color: blue}", encoding="utf-8"
+    )
+    (docs / "01-files/js/site.js").write_text("console.log('ready')", encoding="utf-8")
+    (docs / "01-files/img/logo.png").write_bytes(b"logo")
+    (docs / "01-files/ts/source.ts").write_text("const x: number = 1", encoding="utf-8")
+    (docs / "01-files/README.md").write_text("asset documentation", encoding="utf-8")
+    (docs / "01-files/lua/example.lua").write_text("source", encoding="utf-8")
+    (docs / "01-files/fonts/site.woff2").write_bytes(b"font")
+    (tmp_path / "neon-ssg.yaml").write_text(
+        "content:\n  assets: 01-files\n  remove_prefix: '\\d\\d-'\n", encoding="utf-8"
+    )
+    with chdir(tmp_path):
+        BuildCommand(0).run()
+    home = (tmp_path / "site/index.html").read_text(encoding="utf-8")
+    guide = (tmp_path / "site/guide/index.html").read_text(encoding="utf-8")
+    assert 'href="01-files/css/a.css"' in home
+    assert home.index('href="01-files/css/a.css"') < home.index(
+        'href="01-files/css/nested/b.css"'
+    )
+    assert '<script defer src="../01-files/js/site.js"></script>' in guide
+    assert 'href="../01-files/css/a.css"' in guide
+    assert 'src="01-files/img/logo.png"' in home
+    assert not (tmp_path / "site/01-files/README.md").exists()
+    assert not (tmp_path / "site/01-files/lua").exists()
+    assert (tmp_path / "site/01-files/fonts/site.woff2").read_bytes() == b"font"
+    assert not (tmp_path / "site/01-files/ts").exists()
+    assert "01-files/README" not in home
+
+
+def test_default_assets_and_updated_files(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    (docs / "assets/css").mkdir(parents=True)
+    (docs / "index.md").write_text("# Home", encoding="utf-8")
+    stylesheet = docs / "assets/css/custom.css"
+    stylesheet.write_text("first", encoding="utf-8")
+    with chdir(tmp_path):
+        BuildCommand(0).run()
+        assert (
+            'href="assets/css/custom.css"' in (tmp_path / "site/index.html").read_text()
+        )
+        stylesheet.write_text("second", encoding="utf-8")
+        BuildCommand(0).run()
+    assert (tmp_path / "site/assets/css/custom.css").read_text() == "second"
+
+
+def test_theme_images_use_configured_assets_on_nested_pages(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    (docs / "01-brand/img/icons").mkdir(parents=True)
+    (docs / "01-guide").mkdir()
+    (docs / "00-index.md").write_text("# Home", encoding="utf-8")
+    (docs / "01-guide/00-index.md").write_text("# Guide", encoding="utf-8")
+    (docs / "01-brand/img/my logo.svg").write_text("logo", encoding="utf-8")
+    (docs / "01-brand/img/icons/favicon.svg").write_text("icon", encoding="utf-8")
+    (tmp_path / "neon-ssg.yaml").write_text(
+        "site:\n  name: Example\ncontent:\n  assets: 01-brand\n"
+        "  remove_prefix: '\\d\\d-'\ntheme:\n"
+        "  logo: my logo.svg\n  favicon: icons/favicon.svg\n",
+        encoding="utf-8",
+    )
+    with chdir(tmp_path):
+        BuildCommand(0).run()
+    home = (tmp_path / "site/index.html").read_text(encoding="utf-8")
+    guide = (tmp_path / "site/guide/index.html").read_text(encoding="utf-8")
+    assert '<img src="01-brand/img/my%20logo.svg" alt="">Example' in home
+    assert '<link rel="icon" href="01-brand/img/icons/favicon.svg">' in home
+    assert '<img src="../01-brand/img/my%20logo.svg" alt="">' in guide
+    assert '<link rel="icon" href="../01-brand/img/icons/favicon.svg">' in guide
+    assert (tmp_path / "site/01-brand/img/my logo.svg").is_file()
+
+
+@pytest.mark.parametrize("setting", ["logo", "favicon"])
+def test_missing_theme_image_reports_setting(tmp_path: Path, setting: str) -> None:
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "neon-ssg.yaml").write_text(
+        f"theme:\n  {setting}: missing.png\n", encoding="utf-8"
+    )
+    with (
+        chdir(tmp_path),
+        pytest.raises(BuildFailedError, match=f"theme.{setting}.*missing.png"),
+    ):
+        BuildCommand(0).run()

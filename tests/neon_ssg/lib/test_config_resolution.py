@@ -94,8 +94,8 @@ repo:
 theme:
   name: bright
   overrides: ../overrides
-  logo: ../brand/logo.svg
-  favicon: ../brand/favicon.svg
+  logo: brand/logo.svg
+  favicon: brand/favicon.svg
 i18n:
   default: en
   fallback: false
@@ -129,8 +129,8 @@ assets:
     assert config.repo.edit_path == PurePosixPath("source")
     assert config.theme.name == "bright"
     assert config.theme.overrides == (tiers.project / "../overrides").resolve()
-    assert config.theme.logo == (tiers.project / "../brand/logo.svg").resolve()
-    assert config.theme.favicon == (tiers.project / "../brand/favicon.svg").resolve()
+    assert config.theme.logo == PurePosixPath("brand/logo.svg")
+    assert config.theme.favicon == PurePosixPath("brand/favicon.svg")
     assert config.i18n.default == "en"
     assert config.i18n.fallback is False
     assert config.versions.provider == "json"
@@ -316,7 +316,7 @@ def test_i18n_scalars_without_a_locale_map_still_use_one_locale(
     assert collector.diagnostics == ()
 
 
-def test_a_user_tier_path_is_resolved_against_the_project(tiers: Tiers) -> None:
+def test_a_user_tier_theme_image_remains_relative(tiers: Tiers) -> None:
     _write(
         tiers.config(tiers.xdg),
         "content:\n  docs_root: shared-docs\ntheme:\n  logo: brand/logo.svg\n",
@@ -325,5 +325,40 @@ def test_a_user_tier_path_is_resolved_against_the_project(tiers: Tiers) -> None:
     config, collector = _resolve()
 
     assert config.content.docs_root == (tiers.project / "shared-docs").resolve()
-    assert config.theme.logo == (tiers.project / "brand/logo.svg").resolve()
+    assert config.theme.logo == PurePosixPath("brand/logo.svg")
     assert collector.diagnostics == ()
+
+
+def test_assets_directory_scalar_precedence(tiers: Tiers) -> None:
+    _write(tiers.config(tiers.project), "content:\n  assets: site-assets\n")
+    with mock.patch.dict(os.environ, {"NEON_SSG__CONTENT__ASSETS": "env-assets"}):
+        config, collector = _resolve(cli_values={"content.assets": "cli-assets"})
+        assert config.content.assets == "cli-assets"
+        assert collector.diagnostics == ()
+        config, _ = _resolve()
+        assert config.content.assets == "env-assets"
+    config, _ = _resolve()
+    assert config.content.assets == "site-assets"
+
+
+@pytest.mark.usefixtures("tiers")
+@pytest.mark.parametrize(
+    "value", ["..", ".hidden", "nested/assets", "a\\\\b", "C:assets", ""]
+)
+def test_invalid_assets_directory(value: str) -> None:
+    config, collector = _resolve(cli_values={"content.assets": value})
+    assert config.content.assets == "assets"
+    assert collector.has_errors
+
+
+@pytest.mark.usefixtures("tiers")
+@pytest.mark.parametrize(
+    "value", ["", "/logo.svg", "../logo.svg", "a/../logo.svg", "a\\b", "C:logo.svg"]
+)
+def test_invalid_theme_image_paths(value: str) -> None:
+    config, collector = _resolve(
+        cli_values={"theme.logo": value, "theme.favicon": value}
+    )
+    assert config.theme.logo is None
+    assert config.theme.favicon is None
+    assert len(collector.diagnostics) == 2

@@ -117,3 +117,53 @@ precedence over `README.md` after path cleanup. Among candidates of the same
 kind, the lexicographically first source path wins. Other candidates are not
 rendered; links to them lead to the selected index. This selection is confined
 to each source directory, and other output collisions remain errors.
+
+## Custom assets
+
+Place site assets under `docs/assets/`, or choose a different directory name
+relative to the documentation directory:
+
+```yaml
+content:
+    assets: site-assets
+```
+
+The name must be a single, non-hidden directory name. It is used unchanged in
+the generated site, even when page URL prefix or suffix removal is enabled.
+Only files within the `img/`, `css/`, `js/` and `fonts/` subdirectories are
+copied. They are copied as-is, and Markdown files in those directories are
+not treated as documentation pages. Other files and subdirectories in the
+assets directory are excluded. For example, an image at
+`docs/site-assets/img/logo.png` can be referenced from a Markdown page as
+`![Logo](site-assets/img/logo.png)` (adjust the relative path for nested
+pages).
+
+Every `.css` file under `assets/css/` is linked on each page after the built-in
+styles, and every `.js` file under `assets/js/` is loaded with `defer` on each
+page. Files are included in lexicographical path order within each type, and
+nested directories are supported. Replace `assets` in these paths with the
+configured name when using a custom directory. Paths are relative to each page,
+so the generated site can be hosted beneath a URL prefix. Only add CSS and
+JavaScript that should run on every page.
+
+The generator does not compile TypeScript. An `assets/ts/` directory is
+ignored and is not published. Compile TypeScript to `assets/js/` separately
+before `ssg build`, for example as a CI step. During `ssg serve`, run your
+TypeScript compiler in watch mode separately and configure it to write to
+`assets/js/`; the preview rebuilds when the generated JavaScript changes.
+TypeScript sources can instead live outside the documentation directory.
+
+The theme can display a logo beside the site name and set a browser favicon.
+Specify their paths relative to the configured asset directory's `img/`
+subdirectory:
+
+```yaml
+theme:
+    logo: brand/logo.svg
+    favicon: favicon.ico
+```
+
+For the default asset directory, these files are `docs/assets/img/brand/logo.svg`
+and `docs/assets/img/favicon.ico`. With `content.assets: site-assets`, use
+`docs/site-assets/img/` instead. Both settings are optional. A configured image
+that cannot be found fails the build with the setting and expected path.
