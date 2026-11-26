@@ -6,7 +6,7 @@ build-backend = "uv_build"
 
 [project]
 name = "neon-ssg"
-version = "0.1.0"
+version = "0.2.0"
 
 authors = [
     { name = "Stephanos Kuma", email = "stephanos@kuma.ai" },
