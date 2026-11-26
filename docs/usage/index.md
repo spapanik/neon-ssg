@@ -220,3 +220,28 @@ as a web font; spaces, hyphens and underscores in names are ignored. For example
 `Roboto-BoldItalic.woff2` provide the corresponding variants. A filename
 without a variant, such as `Roboto.woff2`, supplies the regular face. Local
 fonts are copied into the site and use relative URLs, including on nested pages.
+
+## Mermaid diagrams
+
+Enable Mermaid rendering in `neon-ssg.yaml`:
+
+```yaml
+markdown:
+    mermaid: true
+```
+
+Then use fenced Markdown blocks labelled `mermaid`:
+
+````markdown
+```mermaid
+flowchart LR
+    Author --> Build --> Site
+```
+````
+
+Mermaid is disabled by default. When enabled, pages containing diagrams load a
+pinned Mermaid JavaScript release from jsDelivr; visitors need network access
+and JavaScript to see rendered diagrams. The diagram source remains visible if
+the script cannot load. Other pages do not load Mermaid. Mermaid runs in its
+strict security mode, which disables diagram click actions and encodes HTML in
+labels.

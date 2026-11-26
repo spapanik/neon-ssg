@@ -123,6 +123,7 @@ class ThemeConfig:
 class MarkdownConfig:
     extensions: tuple[str, ...]
     extension_config: Mapping[str, Mapping[str, object]]
+    mermaid: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -552,6 +553,7 @@ def resolve_config(
     markdown = MarkdownConfig(
         extensions=DEFAULT_MARKDOWN_EXTENSIONS,
         extension_config={},
+        mermaid=resolver.setting("markdown.mermaid", rtype=as_bool, default=False),
     )
 
     i18n_default = resolver.setting(

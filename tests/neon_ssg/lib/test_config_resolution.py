@@ -375,3 +375,15 @@ def test_theme_font_setting_precedence(tiers: Tiers) -> None:
         assert config.theme.text == "Arial"
     config, _ = _resolve()
     assert config.theme.text == "Georgia"
+
+
+def test_mermaid_setting_precedence(tiers: Tiers) -> None:
+    _write(tiers.config(tiers.project), "markdown:\n  mermaid: true\n")
+    config, collector = _resolve()
+    assert config.markdown.mermaid is True
+    assert collector.diagnostics == ()
+    with mock.patch.dict(os.environ, {"NEON_SSG__MARKDOWN__MERMAID": "false"}):
+        config, _ = _resolve()
+        assert config.markdown.mermaid is False
+        config, _ = _resolve(cli_values={"markdown.mermaid": True})
+        assert config.markdown.mermaid is True

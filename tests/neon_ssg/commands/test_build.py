@@ -470,3 +470,31 @@ def test_navigation_collapses_sections_and_expands_current_path(tmp_path: Path) 
     assert "<details open><summary><span>Advanced</span></summary>" in topic
     assert '<a href="./" aria-current="page">Topic</a>' in topic
     assert '<details><summary><a href="../../../other/">Other</a></summary>' in topic
+
+
+def test_mermaid_is_opt_in_and_leaves_other_code_blocks_alone(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "index.md").write_text(
+        '# Diagrams\n\n```mermaid\nflowchart LR\n A["<hello>"] --> B\n```\n\n'
+        '```python\nprint("hello")\n```\n',
+        encoding="utf-8",
+    )
+    (docs / "plain.md").write_text("# No diagram", encoding="utf-8")
+    config = tmp_path / "neon-ssg.yaml"
+    with chdir(tmp_path):
+        BuildCommand(0).run()
+        home = (tmp_path / "site/index.html").read_text(encoding="utf-8")
+        assert '<div class="mermaid">' not in home
+        assert "mermaid.esm.min.mjs" not in home
+        config.write_text("markdown:\n  mermaid: true\n", encoding="utf-8")
+        BuildCommand(0).run()
+    home = (tmp_path / "site/index.html").read_text(encoding="utf-8")
+    plain = (tmp_path / "site/plain/index.html").read_text(encoding="utf-8")
+    assert '<div class="mermaid">flowchart LR' in home
+    assert "&lt;hello&gt;" in home
+    assert "mermaid@11.4.1/dist/mermaid.esm.min.mjs" in home
+    assert 'securityLevel:"strict"' in home
+    assert "<pre" in home
+    assert "hello" in home
+    assert "mermaid.esm.min.mjs" not in plain

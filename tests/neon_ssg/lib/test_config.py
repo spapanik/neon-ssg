@@ -53,7 +53,7 @@ SCHEMA_KEYS: dict[type[DataclassInstance], set[str]] = {
         "text",
         "code",
     },
-    MarkdownConfig: {"extensions", "extension_config"},
+    MarkdownConfig: {"extensions", "extension_config", "mermaid"},
     LocaleConfig: {"code", "name", "flag", "docs_dir", "nav"},
     I18nConfig: {"default", "fallback", "locales"},
     VersionsConfig: {"provider", "branch", "default"},

@@ -14,6 +14,7 @@ from jinja2 import Environment, select_autoescape
 from markdown.extensions import Extension
 from markdown.treeprocessors import Treeprocessor
 from markupsafe import Markup
+from pymdownx.superfences import fence_div_format
 
 from neon_ssg.lib.exceptions import BuildFailedError
 
@@ -64,7 +65,11 @@ img{max-width:100%}
 {% if favicon %}<link rel="icon" href="{{ favicon }}">
 {% endif %}{% for css in stylesheets %}<link rel="stylesheet" href="{{ css }}">
 {% endfor %}{% for js in scripts %}<script defer src="{{ js }}"></script>
-{% endfor %}</head>
+{% endfor %}{% if mermaid %}<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+mermaid.initialize({startOnLoad:true,securityLevel:"strict"});
+</script>
+{% endif %}</head>
 <body><header>
 {% if logo %}<img src="{{ logo }}" alt="">{% endif %}{{ site_name }}</header>
 <div class="layout">
@@ -523,7 +528,15 @@ def build(config: Config, data: object) -> None:
                 shutil.copyfile(source, target)
                 continue
             text = source.read_text(encoding="utf-8")
+            extension_configs = dict(config.markdown.extension_config)
+            if config.markdown.mermaid:
+                superfences = dict(extension_configs.get("pymdownx.superfences", {}))
+                superfences["custom_fences"] = [
+                    {"name": "mermaid", "class": "mermaid", "format": fence_div_format}
+                ]
+                extension_configs["pymdownx.superfences"] = superfences
             converter = markdown.Markdown(
+                extension_configs=extension_configs,
                 extensions=[
                     *config.markdown.extensions,
                     _LinkExtension(
@@ -533,7 +546,7 @@ def build(config: Config, data: object) -> None:
                         translation.path if translation else None,
                         asset_root,
                     ),
-                ]
+                ],
             )
             html = converter.convert(text)
             title = next(
@@ -546,6 +559,7 @@ def build(config: Config, data: object) -> None:
             )
             rendered = template.render(
                 title=title,
+                mermaid=config.markdown.mermaid and '<div class="mermaid">' in html,
                 font_css=Markup(  # noqa: S704
                     _font_css(
                         config.theme.text, config.theme.code, font_files, outputs[path]
