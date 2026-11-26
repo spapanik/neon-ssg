@@ -97,11 +97,15 @@ class _Links(Treeprocessor):
         origin: PurePosixPath,
         pages: set[PurePosixPath],
         outputs: dict[PurePosixPath, PurePosixPath] | None = None,
+        source_prefix: PurePosixPath | None = None,
+        asset_root: PurePosixPath | None = None,
     ) -> None:
         super().__init__()
         self.origin = origin
         self.pages = pages
         self.outputs = outputs or {page: page_path(page) for page in pages}
+        self.source_prefix = source_prefix
+        self.asset_root = asset_root
 
     def run(self, root: Element) -> None:
         for element in root.iter():
@@ -128,6 +132,12 @@ class _Links(Treeprocessor):
             path = PurePosixPath(
                 posixpath.normpath(str(self.origin.parent / unquote(parts.path)))
             )
+            if path not in self.outputs and self.source_prefix and self.asset_root:
+                shared = PurePosixPath(
+                    posixpath.normpath(str(self.source_prefix / path))
+                )
+                if self.asset_root in shared.parents and shared in self.outputs:
+                    path = shared
             if path not in self.outputs and parts.path.lower().endswith(".md"):
                 msg = f"{self.origin}: linked page not found: {parts.path}"
                 raise BuildFailedError(msg)
@@ -163,15 +173,27 @@ class _LinkExtension(Extension):
         origin: PurePosixPath,
         pages: set[PurePosixPath],
         outputs: dict[PurePosixPath, PurePosixPath] | None = None,
+        source_prefix: PurePosixPath | None = None,
+        asset_root: PurePosixPath | None = None,
     ) -> None:
         super().__init__()
         self.origin = origin
         self.pages = pages
         self.outputs = outputs or {page: page_path(page) for page in pages}
+        self.source_prefix = source_prefix
+        self.asset_root = asset_root
 
     def extendMarkdown(self, md: markdown.Markdown) -> None:  # noqa: N802
         md.treeprocessors.register(
-            _Links(self.origin, self.pages, self.outputs), "neon_links", 5
+            _Links(
+                self.origin,
+                self.pages,
+                self.outputs,
+                self.source_prefix,
+                self.asset_root,
+            ),
+            "neon_links",
+            5,
         )
 
 
@@ -273,12 +295,29 @@ def build(config: Config, data: object) -> None:
         msg = f"Refusing to replace unmarked output directory: {output}"
         raise BuildFailedError(msg)
 
+    translation = config.default_translation
+    content_root = docs if translation is None else (docs / translation.path).resolve()
+    if not content_root.is_relative_to(docs) or not content_root.is_dir():
+        msg = f"Default translation directory not found or outside docs: {content_root}"
+        raise BuildFailedError(msg)
     files = {
-        PurePosixPath(p.relative_to(docs).as_posix()): p
-        for p in sorted(docs.rglob("*"))
+        PurePosixPath(p.relative_to(content_root).as_posix()): p
+        for p in sorted(content_root.rglob("*"))
         if p.is_file()
-        and not any(part.startswith(".") for part in p.relative_to(docs).parts)
+        and not any(part.startswith(".") for part in p.relative_to(content_root).parts)
     }
+    if translation is not None:
+        asset_dir = docs / config.content.assets
+        # Assets are shared at the root of the documentation tree.
+        for p in sorted(asset_dir.rglob("*")):
+            if p.is_file() and not any(
+                part.startswith(".") for part in p.relative_to(docs).parts
+            ):
+                key = PurePosixPath(p.relative_to(docs).as_posix())
+                if key in files:
+                    msg = f"Shared asset conflicts with translation content: {key}"
+                    raise BuildFailedError(msg)
+                files[key] = p
     content = data.get("content", {}) if isinstance(data, dict) else {}
     if not isinstance(content, dict):
         msg = "content must be a mapping"
@@ -323,9 +362,8 @@ def build(config: Config, data: object) -> None:
         if path.suffix.lower() == ".md" and asset_root not in path.parents
     }
     outputs = {
-        path: page_path(
-            path, config.content.remove_prefix, config.content.remove_suffix
-        )
+        path: (translation.link if translation else PurePosixPath())
+        / page_path(path, config.content.remove_prefix, config.content.remove_suffix)
         if path in pages
         else path
         for path in files
@@ -393,7 +431,13 @@ def build(config: Config, data: object) -> None:
             converter = markdown.Markdown(
                 extensions=[
                     *config.markdown.extensions,
-                    _LinkExtension(path, pages, outputs),
+                    _LinkExtension(
+                        path,
+                        pages,
+                        outputs,
+                        translation.path if translation else None,
+                        asset_root,
+                    ),
                 ]
             )
             html = converter.convert(text)
@@ -408,7 +452,7 @@ def build(config: Config, data: object) -> None:
             rendered = template.render(
                 title=title,
                 site_name=config.site.name,
-                language=config.i18n.default,
+                language=translation.lang if translation else config.i18n.default,
                 logo=(
                     quote(
                         posixpath.relpath(
@@ -447,6 +491,20 @@ def build(config: Config, data: object) -> None:
                 content=Markup(html),  # noqa: S704
             )
             target.write_text(rendered, encoding="utf-8")
+        if translation is not None:
+            redirect = staging / "index.html"
+            if redirect.exists():
+                msg = "The default translation redirect conflicts with an output file"
+                raise BuildFailedError(msg)
+            url = quote(str(translation.link), safe="/") + "/"
+            safe_url = escape(url, quote=True)
+            redirect.write_text(
+                '<!doctype html><html><head><meta charset="utf-8">'
+                f'<meta http-equiv="refresh" content="0; url={safe_url}">'
+                f'<title>Redirecting</title></head><body><a href="{safe_url}">'
+                "Continue to the documentation</a></body></html>",
+                encoding="utf-8",
+            )
         (staging / MARKER).write_text("neon-ssg output\n", encoding="utf-8")
         previous = Path(tmp) / "previous"
         if output.exists():

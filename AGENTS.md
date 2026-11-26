@@ -124,6 +124,16 @@ search, diagnostics and rebuild invalidation with multiple locales in mind.
   missing translations must be visible through useful diagnostics rather than
   silently producing ambiguous output. The existing configuration defaults to
   English and enables fallback, but rendering and fallback are not yet built.
+- Translation configuration uses `translations.default` and
+  `translations.alternate` lists. Each entry has `name` (the language selector
+  label), `link` (the published URL prefix), `path` (the source directory under
+  the configured docs directory) and `lang` (the language code). When `path`
+  is omitted, use `link` as the source directory. For example, English can use
+  `name: 🇬🇧 English`, `link: en/`, `path: en-gb/`, and `lang: en`.
+- A build or preview must not require alternate translation source directories
+  or outputs to exist: translations may be produced in a later CI step. This
+  does not suppress diagnostics for missing translations when those features
+  are eventually implemented.
 - Preserve Unicode throughout and consider language metadata, text direction,
   accessible language selection and locale-appropriate search when designing
   the interface. Do not assume a flag uniquely represents a language.

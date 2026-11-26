@@ -68,6 +68,7 @@ SCHEMA_KEYS: dict[type[DataclassInstance], set[str]] = {
         "plugins",
         "config_stem",
         "resolution_root",
+        "default_translation",
     },
 }
 

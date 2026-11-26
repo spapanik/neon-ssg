@@ -115,3 +115,22 @@ def test_worker_reports_build_error(
     ):
         importlib.import_module("neon_ssg.preview_worker").main()
     assert capsys.readouterr().err == "bad\n"
+
+
+def test_preview_builds_default_translation(tmp_path: Path) -> None:
+    (tmp_path / "docs/en-gb").mkdir(parents=True)
+    (tmp_path / "docs/en-gb/index.md").write_text("# Hello", encoding="utf-8")
+    (tmp_path / "neon-ssg.yaml").write_text(
+        "translations:\n  default:\n    - name: English\n"
+        "      path: en-gb\n      link: en\n      lang: en\n"
+        "  alternate:\n    - link: missing\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "generations"
+    output.mkdir()
+    preview = Preview(tmp_path, output)
+    assert preview.rebuild(), preview.error
+    assert preview.current is not None
+    assert "Hello" in (preview.current / "en/index.html").read_text(encoding="utf-8")
+    assert 'href="en/"' in (preview.current / "index.html").read_text(encoding="utf-8")
+    preview.stop()

@@ -167,3 +167,30 @@ For the default asset directory, these files are `docs/assets/img/brand/logo.svg
 and `docs/assets/img/favicon.ico`. With `content.assets: site-assets`, use
 `docs/site-assets/img/` instead. Both settings are optional. A configured image
 that cannot be found fails the build with the setting and expected path.
+
+## Default language URL
+
+To publish a site's default language beneath a stable URL prefix, configure a
+single default translation:
+
+```yaml
+translations:
+    default:
+        - name: 🇬🇧 English
+          link: en/
+          path: en-gb/
+          lang: en
+```
+
+Markdown is read from `docs/en-gb/` and published under `en/`. When `path` is
+omitted, it defaults to `link`. Navigation targets are relative to the selected
+language's source directory. The `lang` value sets the generated HTML language;
+`name` is reserved for a future language selector. A static redirect at the
+site root points to the default language. Both `path` and `link` must be safe
+relative paths. Shared assets remain under `docs/assets/` (or the directory
+chosen by `content.assets`); links from language content can refer to them
+using paths relative to their source files.
+
+Alternate entries may be present under `translations.alternate`, but are not
+built, rendered in a selector, or checked for existence yet. Without a
+`translations` section, pages retain their existing root-level URLs.

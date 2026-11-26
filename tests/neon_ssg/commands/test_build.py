@@ -324,3 +324,70 @@ def test_missing_theme_image_reports_setting(tmp_path: Path, setting: str) -> No
         pytest.raises(BuildFailedError, match=f"theme.{setting}.*missing.png"),
     ):
         BuildCommand(0).run()
+
+
+def test_default_translation_builds_prefixed_urls(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    (docs / "en-gb/guide").mkdir(parents=True)
+    (docs / "assets/img").mkdir(parents=True)
+    (docs / "assets/css").mkdir()
+    (docs / "assets/img/logo.svg").write_text("logo", encoding="utf-8")
+    (docs / "assets/css/custom.css").write_text("body {}", encoding="utf-8")
+    (docs / "en-gb/index.md").write_text(
+        "# Home\n\n[Guide](guide/index.md)\n\n![Logo](../assets/img/logo.svg)",
+        encoding="utf-8",
+    )
+    (docs / "en-gb/guide/index.md").write_text(
+        "# Guide\n\n[Home](../index.md)", encoding="utf-8"
+    )
+    (tmp_path / "neon-ssg.yaml").write_text(
+        "translations:\n  default:\n    - name: 🇬🇧 English\n"
+        "      link: en/\n      path: en-gb/\n      lang: en\n"
+        "  alternate:\n    - name: Français\n      link: fr/\n      lang: fr\n"
+        "theme:\n  logo: logo.svg\ncontent:\n  nav:\n"
+        "  - Home: index.md\n  - Guide: guide/index.md\n",
+        encoding="utf-8",
+    )
+    with chdir(tmp_path):
+        BuildCommand(0).run()
+    home = (tmp_path / "site/en/index.html").read_text(encoding="utf-8")
+    guide = (tmp_path / "site/en/guide/index.html").read_text(encoding="utf-8")
+    redirect = (tmp_path / "site/index.html").read_text(encoding="utf-8")
+    assert '<html lang="en">' in home
+    assert 'href="guide/"' in home
+    assert 'href="../">Home</a>' in guide
+    assert 'src="../assets/img/logo.svg"' in home
+    assert 'href="../assets/css/custom.css"' in home
+    assert 'src="../../assets/img/logo.svg"' in guide
+    assert "url=en/" in redirect
+    assert not (tmp_path / "site/fr").exists()
+
+
+def test_default_translation_path_defaults_to_link(tmp_path: Path) -> None:
+    (tmp_path / "docs/en").mkdir(parents=True)
+    (tmp_path / "docs/en/index.md").write_text("# Home", encoding="utf-8")
+    (tmp_path / "neon-ssg.yaml").write_text(
+        "translations:\n  default:\n    - name: English\n"
+        "      link: en/\n      lang: en\n",
+        encoding="utf-8",
+    )
+    with chdir(tmp_path):
+        BuildCommand(0).run()
+    assert (tmp_path / "site/en/index.html").is_file()
+
+
+@pytest.mark.parametrize(
+    "link", ["../escape", "/absolute", "", "a\\b", "https://example.com"]
+)
+def test_invalid_translation_url_fails(tmp_path: Path, link: str) -> None:
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "neon-ssg.yaml").write_text(
+        "translations:\n  default:\n    - name: English\n      lang: en\n"
+        f"      link: '{link}'\n      path: en\n",
+        encoding="utf-8",
+    )
+    with (
+        chdir(tmp_path),
+        pytest.raises(BuildFailedError, match=r"translations\.default\.link"),
+    ):
+        BuildCommand(0).run()

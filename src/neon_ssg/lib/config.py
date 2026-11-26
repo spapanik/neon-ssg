@@ -140,6 +140,14 @@ class I18nConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class DefaultTranslation:
+    name: str
+    link: PurePosixPath
+    path: PurePosixPath
+    lang: str
+
+
+@dataclass(frozen=True, slots=True)
 class VersionsConfig:
     provider: str
     branch: str
@@ -173,6 +181,7 @@ class Config:
 
     config_stem: Path
     resolution_root: Path
+    default_translation: DefaultTranslation | None = None
 
 
 class _ScalarResolver:
@@ -363,6 +372,74 @@ def _regex(value: object) -> None:
         raise ValueError(msg) from exc
 
 
+def _default_translation(
+    data: Mapping[str, object], collector: DiagnosticCollector
+) -> DefaultTranslation | None:
+    translations = data.get("translations")
+    if translations is None:
+        return None
+    if not isinstance(translations, Mapping):
+        collector.add(
+            diagnostic(
+                DiagnosticCode.INVALID_CONFIG_VALUE, "'translations' must be a mapping"
+            )
+        )
+        return None
+    defaults = translations.get("default")
+    if (
+        not isinstance(defaults, list)
+        or len(defaults) != 1
+        or not isinstance(defaults[0], Mapping)
+    ):
+        collector.add(
+            diagnostic(
+                DiagnosticCode.INVALID_CONFIG_VALUE,
+                "'translations.default' must contain exactly one entry",
+            )
+        )
+        return None
+    entry = defaults[0]
+    values: dict[str, str] = {}
+    for field in ("name", "link", "lang", "path"):
+        value = entry.get(field, entry.get("link") if field == "path" else None)
+        if not isinstance(value, str) or not value.strip():
+            collector.add(
+                diagnostic(
+                    DiagnosticCode.INVALID_CONFIG_VALUE,
+                    f"'translations.default.{field}' must be a non-empty string",
+                )
+            )
+        else:
+            values[field] = value
+    for field in ("link", "path"):
+        if field in values:
+            value = values[field]
+            path = PurePosixPath(value)
+            if (
+                path.is_absolute()
+                or not path.parts
+                or ".." in path.parts
+                or "\\" in value
+                or ":" in value
+                or any(part.startswith(".") for part in path.parts)
+            ):
+                collector.add(
+                    diagnostic(
+                        DiagnosticCode.INVALID_CONFIG_VALUE,
+                        f"'translations.default.{field}' must be a safe relative path",
+                    )
+                )
+                values.pop(field)
+    if not all(field in values for field in ("name", "link", "path", "lang")):
+        return None
+    return DefaultTranslation(
+        name=values["name"],
+        link=PurePosixPath(values["link"]),
+        path=PurePosixPath(values["path"]),
+        lang=values["lang"],
+    )
+
+
 def resolve_config(
     source: ConfigSource,
     collector: DiagnosticCollector,
@@ -536,4 +613,5 @@ def resolve_config(
         plugins=(),
         config_stem=source.stem,
         resolution_root=root,
+        default_translation=_default_translation(source.parser.data, collector),
     )
