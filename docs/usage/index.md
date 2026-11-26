@@ -27,6 +27,9 @@ content:
 Create `neon-ssg.yaml` to set the site name and navigation. Entries point to
 Markdown paths relative to the documentation directory; groups can be nested.
 If navigation is omitted, all Markdown pages are listed in path order.
+Navigation groups can be expanded and collapsed without JavaScript. The
+current page is highlighted and its parent groups start expanded; other groups
+start collapsed. Use the chevron to expand a group whose title is also a link.
 
 ```yaml
 site:

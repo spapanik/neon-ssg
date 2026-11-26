@@ -196,7 +196,7 @@ def test_section_index_links_and_explicit_labels(tmp_path: Path) -> None:
         )
         BuildCommand(0).run()
     html = (tmp_path / "site/index.html").read_text(encoding="utf-8")
-    assert "<li>Phonology<ul>" in html
+    assert "<summary><span>Phonology</span></summary>" in html
     assert '<a href="phonology/">Overview</a>' in html
 
 
@@ -433,3 +433,40 @@ def test_default_fonts_and_safe_css_escaping(tmp_path: Path) -> None:
     home = (tmp_path / "site/index.html").read_text(encoding="utf-8")
     assert "evil</style><script>" not in home
     assert "evil\\3c /style\\3e " in home
+
+
+def test_navigation_collapses_sections_and_expands_current_path(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    (docs / "guide/advanced").mkdir(parents=True)
+    (docs / "other").mkdir()
+    for page in (
+        "index.md",
+        "guide/index.md",
+        "guide/advanced/topic.md",
+        "other/index.md",
+    ):
+        (docs / page).write_text("# Page", encoding="utf-8")
+    (tmp_path / "neon-ssg.yaml").write_text(
+        "content:\n  nav:\n  - Home: index.md\n  - Guide:\n"
+        "      - guide/index.md\n      - Advanced:\n"
+        "          - Topic: guide/advanced/topic.md\n"
+        "  - Other:\n      - other/index.md\n",
+        encoding="utf-8",
+    )
+    with chdir(tmp_path):
+        BuildCommand(0).run()
+    home = (tmp_path / "site/index.html").read_text(encoding="utf-8")
+    guide = (tmp_path / "site/guide/index.html").read_text(encoding="utf-8")
+    topic = (tmp_path / "site/guide/advanced/topic/index.html").read_text(
+        encoding="utf-8"
+    )
+    assert '<a href="./" aria-current="page">Home</a>' in home
+    assert '<details><summary><a href="guide/">Guide</a></summary>' in home
+    assert (
+        '<details open><summary><a href="./" aria-current="page">Guide</a></summary>'
+        in guide
+    )
+    assert '<details open><summary><a href="../../">Guide</a></summary>' in topic
+    assert "<details open><summary><span>Advanced</span></summary>" in topic
+    assert '<a href="./" aria-current="page">Topic</a>' in topic
+    assert '<details><summary><a href="../../../other/">Other</a></summary>' in topic

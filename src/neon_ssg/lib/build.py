@@ -35,9 +35,27 @@ header{background:#252044;color:white;padding:1rem 2rem;font-weight:bold;
 display:flex;align-items:center;gap:.75rem}
 header img{max-height:2.5rem;width:auto}
 .layout{display:flex;gap:2rem;max-width:80rem;margin:auto;padding:2rem}
-nav{min-width:14rem}
-nav ul{list-style:none;padding-left:1rem}
-nav>ul{padding:0}
+nav{flex:0 0 15rem;align-self:flex-start;color:inherit;
+ padding:1.25rem;font-size:.95rem}
+nav .nav-title{color:#656778;font-weight:700;padding:.35rem .6rem;margin-bottom:.4rem}
+nav ul{list-style:none;margin:0;padding:0}
+nav ul ul{padding-left:1rem}
+nav li{margin:.1rem 0}
+nav a,nav summary{color:inherit;text-decoration:none}
+nav a{display:block;padding:.45rem .6rem;border-radius:.3rem}
+nav a:hover,nav summary:hover{color:#402b78;background:#f3f2f8}
+nav a[aria-current="page"]{color:#6142a6;font-weight:600}
+nav summary{display:flex;align-items:center;justify-content:space-between;
+ gap:.4rem;cursor:pointer;border-radius:.3rem;list-style:none;min-height:2.2rem}
+nav summary::-webkit-details-marker{display:none}
+nav summary::after{content:"";width:.45rem;height:.45rem;margin-right:.75rem;
+ border-right:2px solid currentColor;border-bottom:2px solid currentColor;
+ transform:rotate(-45deg);flex:none}
+nav details[open]>summary::after{transform:rotate(45deg)}
+nav summary>span{padding:.45rem .6rem}
+nav summary>a{flex:1;min-width:0}
+nav a:focus-visible,nav summary:focus-visible{outline:2px solid #6142a6;
+ outline-offset:2px}
 a{color:#6142a6}
 main{min-width:0;max-width:55rem}
 pre{overflow:auto;background:#f3f2f8;padding:1rem}
@@ -50,7 +68,8 @@ img{max-width:100%}
 <body><header>
 {% if logo %}<img src="{{ logo }}" alt="">{% endif %}{{ site_name }}</header>
 <div class="layout">
-<nav aria-label="Site navigation">{{ navigation }}</nav>
+<nav aria-label="Site navigation"><div class="nav-title">{{ site_name }}</div>
+{{ navigation }}</nav>
 <main>{{ content }}</main></div></body></html>
 """
 
@@ -317,17 +336,32 @@ def _navigation(
                 url = escape(
                     _relative_url(outputs[origin], outputs[target]), quote=True
                 )
-                label = f'<a href="{url}">{label}</a>'
+                current = (
+                    ' aria-current="page"' if outputs[origin] == outputs[target] else ""
+                )
+                label = f'<a href="{url}"{current}>{label}</a>'
                 children = [child for child in value if child != str(target)]
+            else:
+                label = f"<span>{label}</span>"
             nested = _navigation(children, pages, origin, outputs, indexes)
-            result.append(f"<li>{label}{nested}</li>")
+            opened = (
+                " open"
+                if 'aria-current="page"' in label or 'aria-current="page"' in nested
+                else ""
+            )
+            result.append(
+                f"<li><details{opened}><summary>{label}</summary>{nested}</details></li>"
+            )
         elif isinstance(value, str):
             target = _safe_path(value)
             if target not in pages:
                 msg = f"Navigation page not found: {value}"
                 raise BuildFailedError(msg)
             url = escape(_relative_url(outputs[origin], outputs[target]), quote=True)
-            result.append(f'<li><a href="{url}">{escape(title)}</a></li>')
+            current = (
+                ' aria-current="page"' if outputs[origin] == outputs[target] else ""
+            )
+            result.append(f'<li><a href="{url}"{current}>{escape(title)}</a></li>')
         else:
             msg = f"Invalid navigation entry: {item!r}"
             raise BuildFailedError(msg)
