@@ -115,6 +115,8 @@ class ThemeConfig:
     icons: Mapping[str, str]
     logo: PurePosixPath | None
     favicon: PurePosixPath | None
+    text: str = "Roboto"
+    code: str = "Roboto Mono"
 
 
 @dataclass(frozen=True, slots=True)
@@ -537,6 +539,12 @@ def resolve_config(
         features=DEFAULT_THEME_FEATURES,
         palette={},
         icons={},
+        text=resolver.setting(
+            "theme.text", rtype=as_str, default="Roboto", validator=non_empty
+        ),
+        code=resolver.setting(
+            "theme.code", rtype=as_str, default="Roboto Mono", validator=non_empty
+        ),
         logo=None if logo is None else PurePosixPath(logo),
         favicon=None if favicon is None else PurePosixPath(favicon),
     )

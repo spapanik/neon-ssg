@@ -29,7 +29,8 @@ TEMPLATE = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ title }}
 · {{ site_name }}</title>
-<style>body{font:16px/1.6 system-ui,sans-serif;margin:0;color:#202334}
+<style>{{ font_css }}
+body{font-size:16px;line-height:1.6;margin:0;color:#202334}
 header{background:#252044;color:white;padding:1rem 2rem;font-weight:bold;
 display:flex;align-items:center;gap:.75rem}
 header img{max-height:2.5rem;width:auto}
@@ -84,6 +85,60 @@ def page_path(
     if name.lower() not in {"index", "readme"}:
         parts.append(name)
     return PurePosixPath(*parts, "index.html")
+
+
+def _css_string(value: str) -> str:
+    # Escape CSS string delimiters and HTML-sensitive characters, including
+    # closing style tags. This is CSS escaping, not HTML entity escaping.
+    return (
+        '"'
+        + "".join(
+            character
+            if character.isalnum() or character in " -_./%"
+            else f"\\{ord(character):x} "
+            for character in value
+        )
+        + '"'
+    )
+
+
+def _font_css(
+    text_font: str,
+    code_font: str,
+    font_files: list[PurePosixPath],
+    origin: PurePosixPath,
+) -> str:
+    variants = {
+        "": (400, "normal"),
+        "regular": (400, "normal"),
+        "normal": (400, "normal"),
+        "italic": (400, "italic"),
+        "bold": (700, "normal"),
+        "bolditalic": (700, "italic"),
+    }
+
+    def normalise(name: str) -> str:
+        return re.sub(r"[\s_-]+", "", name).casefold()
+
+    rules = []
+    for family in dict.fromkeys((text_font, code_font)):
+        family_key = normalise(family)
+        for path in font_files:
+            stem = normalise(path.stem)
+            if not stem.startswith(family_key):
+                continue
+            variant = variants.get(stem[len(family_key) :])
+            if variant is None:
+                continue
+            weight, style = variant
+            url = quote(posixpath.relpath(str(path), str(origin.parent)), safe="/")
+            rules.append(
+                f"@font-face{{font-family:{_css_string(family)};src:url({_css_string(url)});"
+                f"font-weight:{weight};font-style:{style};font-display:swap}}"
+            )
+    rules.append(f"body{{font-family:{_css_string(text_font)},sans-serif}}")
+    rules.append(f"code,pre,kbd,samp{{font-family:{_css_string(code_font)},monospace}}")
+    return "\n".join(rules)
 
 
 def _relative_url(origin: PurePosixPath, target: PurePosixPath) -> str:
@@ -411,6 +466,12 @@ def build(config: Config, data: object) -> None:
         for path in files
         if asset_root / "js" in path.parents and path.suffix.lower() == ".js"
     )
+    font_files = sorted(
+        path
+        for path in files
+        if asset_root / "fonts" in path.parents
+        and path.suffix.lower() in {".woff2", ".woff", ".ttf", ".otf"}
+    )
     nav = content.get("nav", [str(path) for path in sorted(pages - skipped)])
     template = Environment(autoescape=select_autoescape(default=True)).from_string(
         TEMPLATE
@@ -451,6 +512,11 @@ def build(config: Config, data: object) -> None:
             )
             rendered = template.render(
                 title=title,
+                font_css=Markup(  # noqa: S704
+                    _font_css(
+                        config.theme.text, config.theme.code, font_files, outputs[path]
+                    )
+                ),
                 site_name=config.site.name,
                 language=translation.lang if translation else config.i18n.default,
                 logo=(

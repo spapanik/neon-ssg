@@ -362,3 +362,16 @@ def test_invalid_theme_image_paths(value: str) -> None:
     assert config.theme.logo is None
     assert config.theme.favicon is None
     assert len(collector.diagnostics) == 2
+
+
+def test_theme_font_setting_precedence(tiers: Tiers) -> None:
+    _write(tiers.config(tiers.project), "theme:\n  text: Georgia\n  code: Consolas\n")
+    with mock.patch.dict(os.environ, {"NEON_SSG__THEME__TEXT": "Arial"}):
+        config, collector = _resolve(cli_values={"theme.text": "Times New Roman"})
+        assert config.theme.text == "Times New Roman"
+        assert config.theme.code == "Consolas"
+        assert collector.diagnostics == ()
+        config, _ = _resolve()
+        assert config.theme.text == "Arial"
+    config, _ = _resolve()
+    assert config.theme.text == "Georgia"

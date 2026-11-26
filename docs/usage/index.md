@@ -194,3 +194,26 @@ using paths relative to their source files.
 Alternate entries may be present under `translations.alternate`, but are not
 built, rendered in a selector, or checked for existence yet. Without a
 `translations` section, pages retain their existing root-level URLs.
+
+## Fonts
+
+Set the text and code font families in the theme:
+
+```yaml
+theme:
+    text: Times New Roman
+    code: Comic Sans
+```
+
+The defaults are `Roboto` for text and `Roboto Mono` for code. The browser uses
+an installed font of that family when available, with generic sans-serif and
+monospace fallbacks. Fonts are not downloaded or bundled automatically; to use
+Roboto on every device, provide the font files yourself.
+
+You can place WOFF2, WOFF, TTF or OTF files in `docs/assets/fonts/` (or the
+configured assets directory). A file matching the configured family is loaded
+as a web font; spaces, hyphens and underscores in names are ignored. For example,
+`Roboto-Regular.woff2`, `Roboto-Bold.woff2`, `Roboto-Italic.woff2` and
+`Roboto-BoldItalic.woff2` provide the corresponding variants. A filename
+without a variant, such as `Roboto.woff2`, supplies the regular face. Local
+fonts are copied into the site and use relative URLs, including on nested pages.

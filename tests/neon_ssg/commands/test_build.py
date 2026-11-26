@@ -391,3 +391,45 @@ def test_invalid_translation_url_fails(tmp_path: Path, link: str) -> None:
         pytest.raises(BuildFailedError, match=r"translations\.default\.link"),
     ):
         BuildCommand(0).run()
+
+
+def test_configurable_fonts_load_local_files_and_system_names(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    (docs / "assets/fonts").mkdir(parents=True)
+    (docs / "guide").mkdir()
+    (docs / "index.md").write_text("# Home", encoding="utf-8")
+    (docs / "guide/index.md").write_text("# Guide", encoding="utf-8")
+    (docs / "assets/fonts/ComicSans-Regular.woff2").write_bytes(b"font")
+    (docs / "assets/fonts/ComicSans-Bold.woff2").write_bytes(b"font")
+    (docs / "assets/fonts/Other-Regular.woff2").write_bytes(b"font")
+    (tmp_path / "neon-ssg.yaml").write_text(
+        "theme:\n  text: Times New Roman\n  code: Comic Sans\n", encoding="utf-8"
+    )
+    with chdir(tmp_path):
+        BuildCommand(0).run()
+    home = (tmp_path / "site/index.html").read_text(encoding="utf-8")
+    guide = (tmp_path / "site/guide/index.html").read_text(encoding="utf-8")
+    assert 'font-family:"Times New Roman",sans-serif' in home
+    assert 'font-family:"Comic Sans",monospace' in home
+    assert 'url("assets/fonts/ComicSans-Regular.woff2")' in home
+    assert 'url("../assets/fonts/ComicSans-Bold.woff2")' in guide
+    assert "font-weight:700;font-style:normal" in guide
+    assert "Other-Regular" not in home
+
+
+def test_default_fonts_and_safe_css_escaping(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "index.md").write_text("# Home", encoding="utf-8")
+    with chdir(tmp_path):
+        BuildCommand(0).run()
+        home = (tmp_path / "site/index.html").read_text(encoding="utf-8")
+        assert 'font-family:"Roboto",sans-serif' in home
+        assert 'font-family:"Roboto Mono",monospace' in home
+        (tmp_path / "neon-ssg.yaml").write_text(
+            "theme:\n  text: 'evil</style><script>'\n", encoding="utf-8"
+        )
+        BuildCommand(0).run()
+    home = (tmp_path / "site/index.html").read_text(encoding="utf-8")
+    assert "evil</style><script>" not in home
+    assert "evil\\3c /style\\3e " in home

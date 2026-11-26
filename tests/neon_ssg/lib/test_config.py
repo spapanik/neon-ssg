@@ -50,6 +50,8 @@ SCHEMA_KEYS: dict[type[DataclassInstance], set[str]] = {
         "icons",
         "logo",
         "favicon",
+        "text",
+        "code",
     },
     MarkdownConfig: {"extensions", "extension_config"},
     LocaleConfig: {"code", "name", "flag", "docs_dir", "nav"},
